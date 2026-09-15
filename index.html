@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Miner Gun Builder - Simulator</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>MGB Damage Simulator</h1>
+    <div class="controls">
+      <button id="btn-clear">Clear Grid</button>
+      <button id="btn-calc" class="primary">Calculate Damage</button>
+    </div>
+  </header>
+
+  <main class="app-container">
+    <aside class="palette">
+      <h3>Items</h3>
+      <div id="palette-items"></div>
+    </aside>
+
+    <section class="canvas-area">
+      <canvas id="ship-canvas" width="600" height="600"></canvas>
+      <div class="action-bar">
+        <span id="selected-info">Tile: Empty</span>
+        <button id="btn-rotate">Rotate (↻)</button>
+        <button id="btn-delete">Delete (🗑)</button>
+      </div>
+    </section>
+
+    <section class="results-panel">
+      <h3>Damage Analysis</h3>
+      <div class="kpi-cards">
+        <div class="card"><span>Expected Value</span><strong id="kpi-ev">0</strong></div>
+        <div class="card"><span>Min / Max</span><strong id="kpi-range">0 / 0</strong></div>
+      </div>
+      <canvas id="chart-canvas"></canvas>
+    </section>
+  </main>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
