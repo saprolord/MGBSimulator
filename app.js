@@ -7,7 +7,7 @@ let shipGrid = Array(GRID_SIZE).fill(null).map(() =>
 );
 
 let selectedTile = { x: -1, y: -1 };
-let selectedPaletteBlock = 'Turn Right';
+let selectedPaletteBlock = null; // Default to no block selected
 let currentCalculation = null;
 let chartInstance = null;
 
@@ -17,7 +17,7 @@ const ITEM_PALETTE = [
   '+1 Damage', '+1 Projectile', '33% x2 Damage'
 ];
 
-// Re-oriented Layout: Emitter at Bottom (10, 5) pointing NORTH (0 deg), Ejector at Top (1, 5)
+// Layout Setup
 shipGrid[10][5] = { type: 'EMITTER', block: null, rotation: 0 }; 
 shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 };
 
@@ -31,21 +31,28 @@ const btnClear = document.getElementById('btn-clear');
 const btnCalc = document.getElementById('btn-calc');
 const paletteContainer = document.getElementById('palette-items');
 
-// --- INIT PALETTE ---
+// --- 1. TOGGLE-ABLE PALETTE SELECTION ---
 function buildPaletteUI() {
   paletteContainer.innerHTML = '';
   ITEM_PALETTE.forEach(item => {
     const btn = document.createElement('button');
     btn.className = 'palette-btn' + (item === selectedPaletteBlock ? ' active' : '');
     btn.textContent = item;
-    btn.style.display = 'block';
-    btn.style.width = '100%';
-    btn.style.marginBottom = '8px';
+    
     btn.addEventListener('click', () => {
-      selectedPaletteBlock = item;
+      // Toggle selection: click again to deselect
+      if (selectedPaletteBlock === item) {
+        selectedPaletteBlock = null;
+      } else {
+        selectedPaletteBlock = item;
+      }
+
       document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      if (selectedPaletteBlock) {
+        btn.classList.add('active');
+      }
     });
+    
     paletteContainer.appendChild(btn);
   });
 }
@@ -60,12 +67,10 @@ function drawGrid() {
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      // Base Backgrounds
       ctx.fillStyle = tile.type === 'EMITTER' ? '#1e3a1e' : 
                       tile.type === 'EJECTOR' ? '#3a1e1e' : '#222222';
       ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 
-      // Grid Lines
       ctx.strokeStyle = '#333333';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
@@ -94,7 +99,7 @@ function drawGrid() {
     }
   }
 
-  // Draw Path Overlay Lines
+  // Draw Trajectory Traces
   if (currentCalculation && currentCalculation.traces) {
     drawPathTraces(currentCalculation.traces);
   }
@@ -125,6 +130,7 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.restore();
 }
 
+// --- 3. EDGE-STOPPED TRAJECTORY DRAWING ---
 function drawPathTraces(traces) {
   ctx.strokeStyle = '#4caf50';
   ctx.lineWidth = 4;
@@ -132,16 +138,43 @@ function drawPathTraces(traces) {
 
   traces.forEach(trace => {
     if (trace.length < 2) return;
+    
     ctx.beginPath();
-    ctx.moveTo(trace[0].c * TILE_SIZE + 25, trace[0].r * TILE_SIZE + 25);
+    // Start at center of initial cell (Emitter)
+    let startX = trace[0].c * TILE_SIZE + 25;
+    let startY = trace[0].r * TILE_SIZE + 25;
+    ctx.moveTo(startX, startY);
+
     for (let i = 1; i < trace.length; i++) {
-      ctx.lineTo(trace[i].c * TILE_SIZE + 25, trace[i].r * TILE_SIZE + 25);
+      let prevCell = trace[i - 1];
+      let currCell = trace[i];
+      let isLast = (i === trace.length - 1);
+
+      let targetX = currCell.c * TILE_SIZE + 25;
+      let targetY = currCell.r * TILE_SIZE + 25;
+
+      // Check if path terminates/stops on this last node
+      if (isLast) {
+        const targetTile = shipGrid[currCell.r][currCell.c];
+        
+        // Stop line at edge of block/wall instead of center if hit invalid face or wall
+        if (targetTile.type === 'WALL' || (targetTile.type === 'SPACE' && targetTile.block)) {
+          let dc = currCell.c - prevCell.c;
+          let dr = currCell.r - prevCell.r;
+
+          // Adjust destination back to the edge boundary of the cell
+          targetX = currCell.c * TILE_SIZE + 25 - (dc * 25);
+          targetY = currCell.r * TILE_SIZE + 25 - (dr * 25);
+        }
+      }
+
+      ctx.lineTo(targetX, targetY);
     }
     ctx.stroke();
   });
 }
 
-// --- INTERACTION & EVENT LISTENERS ---
+// --- INTERACTION LISTENERS ---
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const c = Math.floor((e.clientX - rect.left) / TILE_SIZE);
@@ -151,7 +184,8 @@ canvas.addEventListener('click', (e) => {
     selectedTile = { x: c, y: r };
     const tile = shipGrid[r][c];
 
-    if (tile.type === 'SPACE') {
+    // Place active palette block if one is selected
+    if (tile.type === 'SPACE' && selectedPaletteBlock) {
       tile.block = selectedPaletteBlock;
     }
 
