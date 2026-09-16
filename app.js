@@ -129,7 +129,7 @@ function drawBlock(x, y, blockName, rotation) {
 }
 
 function drawPathTraces(traces) {
-  ctx.strokeStyle = '#4caf50';
+  ctx.strokeStyle = '#FF0000';
   ctx.lineWidth = 4;
   ctx.lineCap = 'round';
 
