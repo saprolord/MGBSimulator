@@ -1,5 +1,6 @@
 // --- TRAVERSAL & PROBABILITY ENGINE ---
 
+// Direction Vectors: 0: North, 90: East, 180: South, 270: West
 const DIR_VECTORS = {
   0:   { dr: -1, dc: 0 },  // North (Up)
   90:  { dr: 0,  dc: 1 },  // East (Right)
@@ -45,7 +46,7 @@ function calculateShip(shipGrid, gridSize) {
     let nextR = currentNode.r + vec.dr;
     let nextC = currentNode.c + vec.dc;
 
-    // Out of grid bounds
+    // Out of grid bounds -> Stop trajectory & store trace
     if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
       allTraces.push(currentNode.pathTrace);
       continue;
@@ -54,11 +55,13 @@ function calculateShip(shipGrid, gridSize) {
     const targetTile = shipGrid[nextR][nextC];
     let newTrace = [...currentNode.pathTrace, { r: nextR, c: nextC }];
 
+    // Hit Wall -> Stop trajectory & store trace
     if (targetTile.type === 'WALL') {
       allTraces.push(newTrace);
       continue;
     }
 
+    // Hit Ejector -> Register hit & store trace
     if (targetTile.type === 'EJECTOR') {
       ejectorHits.push({ damageDist: currentNode.damageDist, pathTrace: newTrace });
       allTraces.push(newTrace);
@@ -67,23 +70,21 @@ function calculateShip(shipGrid, gridSize) {
 
     if (targetTile.type === 'SPACE') {
       if (!targetTile.block) {
-        // Pass straight through open space
+        // Rule 0: Pass straight through open space
         activeNodes.push({
           r: nextR, c: nextC, dir: currentNode.dir,
           damageDist: currentNode.damageDist, pathTrace: newTrace
         });
       } else {
-        // --- MODIFIER BLOCK ENTRY EVALUATION ---
-        const blockOrientation = normDir(targetTile.rotation);
-        
-        // In MGB, a block's input face depends on its function:
-        // Standard items (+1 Dmg, x2 Dmg, Turn Right/Left, Dual Splitter) enter opposite to their rotation vector.
-        const requiredEntryDir = blockOrientation;
+        // --- RULE 1: ENTRY POINT VALIDATION ---
+        // A block at rotation R has its unique entry point facing (R + 180) deg.
+        // For a projectile traveling in direction D to ENTER this face, D must EQUAL R.
+        const requiredTravelDir = normDir(targetTile.rotation);
 
-        if (currentNode.dir === requiredEntryDir) {
+        if (currentNode.dir === requiredTravelDir) {
           processModifierBlock(targetTile, currentNode, nextR, nextC, newTrace, activeNodes, allTraces);
         } else {
-          // Crashed into side or back face of block -> Terminate path
+          // Rule 1 Violation: Did not enter via entry point -> Trajectory stops here (trace kept)
           allTraces.push(newTrace);
         }
       }
@@ -98,22 +99,24 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
   let newDist = new Map(node.damageDist);
 
   switch (tile.block) {
-    case 'Turn Right':
-      activeNodes.push({
-        r, c, dir: normDir(blockRot + 90),
-        damageDist: newDist, pathTrace: trace
-      });
-      break;
-
     case 'Turn Left':
+      // Rule 3: Rotate 90 deg counter-clockwise (Left relative to block orientation)
       activeNodes.push({
         r, c, dir: normDir(blockRot - 90),
         damageDist: newDist, pathTrace: trace
       });
       break;
 
+    case 'Turn Right':
+      // Rule 4: Rotate 90 deg clockwise (Right relative to block orientation)
+      activeNodes.push({
+        r, c, dir: normDir(blockRot + 90),
+        damageDist: newDist, pathTrace: trace
+      });
+      break;
+
     case 'Dual Splitter':
-      // Splits into two branches: Left and Right relative to the block's orientation
+      // Rule 5: Two exits at 90 deg CW and 90 deg CCW
       activeNodes.push({
         r, c, dir: normDir(blockRot - 90),
         damageDist: new Map(newDist), pathTrace: [...trace]
@@ -125,6 +128,7 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
       break;
 
     case '+1 Damage':
+      // Rule 2: Straight exit line (dir = blockRot), adds +1 damage
       let addDist = new Map();
       newDist.forEach((prob, dmg) => addDist.set(dmg + 1, prob));
       activeNodes.push({
@@ -134,6 +138,7 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
       break;
 
     case '+1 Projectile':
+      // Rule 2: Straight exit line (dir = blockRot), duplicates projectile
       activeNodes.push({
         r, c, dir: blockRot,
         damageDist: new Map(newDist), pathTrace: [...trace]
@@ -145,6 +150,7 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
       break;
 
     case '33% x2 Damage':
+      // Rule 2: Straight exit line (dir = blockRot), 33% chance x2 damage
       let multDist = new Map();
       newDist.forEach((prob, dmg) => {
         let d2 = dmg * 2;
