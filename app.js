@@ -284,8 +284,8 @@ function updateUI() {
     const evElem = document.getElementById('kpi-ev');
     const rangeElem = document.getElementById('kpi-range');
 
-    if (evElem) evElem.textContent = `${currentCalculation.ev} DPS`;
-    if (rangeElem) rangeElem.textContent = `${currentCalculation.min} / ${currentCalculation.max} DPS`;
+    if (evElem) evElem.textContent = `${currentCalculation.ev} `;
+    if (rangeElem) rangeElem.textContent = `${currentCalculation.min} / ${currentCalculation.max} `;
   }
 }
 
@@ -294,7 +294,7 @@ function updateChart(calcResult) {
   if (!chartCanvas || !calcResult.dist) return;
 
   // Chart labels explicitly styled as DPS values
-  const labels = Object.keys(calcResult.dist).map(d => `${d} DPS`);
+  const labels = Object.keys(calcResult.dist).map(d => `${d} `);
   const data = Object.values(calcResult.dist).map(p => (p * 100).toFixed(1));
 
   if (chartInstance) {
