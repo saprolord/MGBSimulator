@@ -34,16 +34,16 @@ const paletteContainer = document.getElementById('palette-items');
 // --- IMAGE ASSET CONFIGURATION ---
 // Update these file paths to match your assets folder structure
 const BLOCK_IMAGES = {
-  'EMITTER':        'images/Projectile_generator.webp',
-  'EJECTOR':        'images/Ejection_block.webp',
-  'WALL':           'images/Solid_block.webp',
-  'SPACE':          'images/Empty_slot.webp',
-  'Turn Right':     'images/Right_turn.webp',
-  'Turn Left':      'images/Left_turn.webp',
-  'Dual Splitter':  'images/Split_sides.webp',
-  '+1 Damage':      'images/More_damage.webp',
-  '+1 Projectile':  'images/Clone_bullet.webp',
-  '33% x2 Damage':  'images/Double_damage.webp'
+  'EMITTER':        'Images/Projectile_generator.webp',
+  'EJECTOR':        'Images/Ejection_block.webp',
+  'WALL':           'Images/Solid_block.webp',
+  'SPACE':          'Images/Empty_slot.webp',
+  'Turn Right':     'Images/Right_turn.webp',
+  'Turn Left':      'Images/Left_turn.webp',
+  'Dual Splitter':  'Images/Split_sides.webp',
+  '+1 Damage':      'Images/More_damage.webp',
+  '+1 Projectile':  'Images/Clone_bullet.webp',
+  '33% x2 Damage':  'Images/Double_damage.webp'
 };
 
 // Preload Images
