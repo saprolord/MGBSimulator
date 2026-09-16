@@ -31,14 +31,51 @@ const btnClear = document.getElementById('btn-clear');
 const btnCalc = document.getElementById('btn-calc');
 const paletteContainer = document.getElementById('palette-items');
 
+// --- IMAGE ASSET CONFIGURATION ---
+// Update these file paths to match your assets folder structure
+const BLOCK_IMAGES = {
+  'EMITTER':        'images/Projectile_generator.webp',
+  'EJECTOR':        'images/Ejection_block.webp',
+  'WALL':           'images/Solid_block.webp',
+  'SPACE':          'images/Empty_slot.webp',
+  'Turn Right':     'images/Right_turn.webp',
+  'Turn Left':      'images/Left_turn.webp',
+  'Dual Splitter':  'images/Split_sides.webp',
+  '+1 Damage':      'images/More_damage.webp',
+  '+1 Projectile':  'images/Clone_bullet.webp',
+  '33% x2 Damage':  'images/Double_damage.webp'
+};
+
+// Preload Images
+const loadedImages = {};
+Object.entries(BLOCK_IMAGES).forEach(([key, src]) => {
+  const img = new Image();
+  img.src = src;
+  img.onload = () => drawGrid(); // Redraw canvas once images load
+  loadedImages[key] = img;
+});
+
 // --- PALETTE UI ---
 function buildPaletteUI() {
   paletteContainer.innerHTML = '';
   ITEM_PALETTE.forEach(item => {
     const btn = document.createElement('button');
     btn.className = 'palette-btn' + (item === selectedPaletteBlock ? ' active' : '');
-    btn.textContent = item;
+    btn.title = item; // Tooltip on hover
     
+    // Add image element inside button
+    if (BLOCK_IMAGES[item]) {
+      const img = document.createElement('img');
+      img.src = BLOCK_IMAGES[item];
+      img.alt = item;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'contain';
+      btn.appendChild(img);
+    } else {
+      btn.textContent = item;
+    }
+
     btn.addEventListener('click', () => {
       if (selectedPaletteBlock === item) {
         selectedPaletteBlock = null;
@@ -66,30 +103,27 @@ function drawGrid() {
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      ctx.fillStyle = tile.type === 'EMITTER' ? '#1e3a1e' : 
-                      tile.type === 'EJECTOR' ? '#3a1e1e' : '#222222';
-      ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      // 1. Draw Base Tile Background (SPACE, EMITTER, EJECTOR, WALL)
+      const baseImg = loadedImages[tile.type];
+      if (baseImg && baseImg.complete) {
+        ctx.drawImage(baseImg, x, y, TILE_SIZE, TILE_SIZE);
+      } else {
+        // Fallback color while loading
+        ctx.fillStyle = tile.type === 'EMITTER' ? '#1e3a1e' : 
+                        tile.type === 'EJECTOR' ? '#3a1e1e' : '#222222';
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      }
 
       ctx.strokeStyle = '#333333';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
 
-      if (tile.type === 'EMITTER') {
-        ctx.fillStyle = '#4caf50';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('START (▲)', x + 25, y + 28);
-      } else if (tile.type === 'EJECTOR') {
-        ctx.fillStyle = '#f44336';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('EXIT', x + 25, y + 28);
-      }
-
+      // 2. Draw Modifier Block
       if (tile.block) {
         drawBlock(x, y, tile.block, tile.rotation);
       }
 
+      // Selection Highlight
       if (selectedTile.x === c && selectedTile.y === r) {
         ctx.strokeStyle = '#007acc';
         ctx.lineWidth = 3;
@@ -108,22 +142,15 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
   ctx.rotate((rotation * Math.PI) / 180);
 
-  ctx.fillStyle = blockName.includes('Damage') ? '#8e24aa' : '#005f9e';
-  ctx.fillRect(-20, -20, 40, 40);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(blockName.substring(0, 5), 0, 4);
-
-  // Arrowhead pointing forward
-  ctx.fillStyle = '#4fc3f7';
-  ctx.beginPath();
-  ctx.moveTo(0, -18);
-  ctx.lineTo(6, -10);
-  ctx.lineTo(-6, -10);
-  ctx.closePath();
-  ctx.fill();
+  const img = loadedImages[blockName];
+  if (img && img.complete) {
+    // Draw rotated image inside tile
+    ctx.drawImage(img, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+  } else {
+    // Fallback block render
+    ctx.fillStyle = blockName.includes('Damage') ? '#8e24aa' : '#005f9e';
+    ctx.fillRect(-20, -20, 40, 40);
+  }
 
   ctx.restore();
 }
