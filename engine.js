@@ -1,10 +1,10 @@
 // --- TRAVERSAL & PROBABILITY ENGINE ---
 
 const DIR_VECTORS = {
-  0:   { dr: -1, dc: 0 },  // North
-  90:  { dr: 0,  dc: 1 },  // East
-  180: { dr: 1,  dc: 0 },  // South
-  270: { dr: 0,  dc: -1 }  // West
+  0:   { dr: -1, dc: 0 },  // North (Up)
+  90:  { dr: 0,  dc: 1 },  // East (Right)
+  180: { dr: 1,  dc: 0 },  // South (Down)
+  270: { dr: 0,  dc: -1 }  // West (Left)
 };
 
 function normDir(dir) {
@@ -22,7 +22,7 @@ function calculateShip(shipGrid, gridSize) {
     }
   }
 
-  if (!emitter) return { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: {} };
+  if (!emitter) return { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
 
   let activeNodes = [{
     r: emitter.r,
@@ -35,7 +35,7 @@ function calculateShip(shipGrid, gridSize) {
   let ejectorHits = [];
   let allTraces = [];
   let steps = 0;
-  const maxSteps = 1000;
+  const maxSteps = 2000;
 
   while (activeNodes.length > 0 && steps < maxSteps) {
     steps++;
@@ -67,16 +67,25 @@ function calculateShip(shipGrid, gridSize) {
 
     if (targetTile.type === 'SPACE') {
       if (!targetTile.block) {
+        // Pass straight through open space
         activeNodes.push({
           r: nextR, c: nextC, dir: currentNode.dir,
           damageDist: currentNode.damageDist, pathTrace: newTrace
         });
       } else {
-        // Enters block: check entry alignment
-        const blockOutputDir = normDir(targetTile.rotation);
+        // --- MODIFIER BLOCK ENTRY EVALUATION ---
+        const blockOrientation = normDir(targetTile.rotation);
         
-        // Block processing:
-        processModifierBlock(targetTile, currentNode, nextR, nextC, newTrace, activeNodes, allTraces);
+        // In MGB, a block's input face depends on its function:
+        // Standard items (+1 Dmg, x2 Dmg, Turn Right/Left, Dual Splitter) enter opposite to their rotation vector.
+        const requiredEntryDir = blockOrientation;
+
+        if (currentNode.dir === requiredEntryDir) {
+          processModifierBlock(targetTile, currentNode, nextR, nextC, newTrace, activeNodes, allTraces);
+        } else {
+          // Crashed into side or back face of block -> Terminate path
+          allTraces.push(newTrace);
+        }
       }
     }
   }
@@ -104,6 +113,7 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
       break;
 
     case 'Dual Splitter':
+      // Splits into two branches: Left and Right relative to the block's orientation
       activeNodes.push({
         r, c, dir: normDir(blockRot - 90),
         damageDist: new Map(newDist), pathTrace: [...trace]
