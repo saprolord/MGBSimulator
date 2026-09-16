@@ -7,7 +7,7 @@ let shipGrid = Array(GRID_SIZE).fill(null).map(() =>
 );
 
 let selectedTile = { x: -1, y: -1 };
-let selectedPaletteBlock = 'Turn Right'; // Default palette tool
+let selectedPaletteBlock = 'Turn Right';
 let currentCalculation = null;
 let chartInstance = null;
 
@@ -17,9 +17,9 @@ const ITEM_PALETTE = [
   '+1 Damage', '+1 Projectile', '33% x2 Damage'
 ];
 
-// Default Layout
-shipGrid[1][5] = { type: 'EMITTER', block: null, rotation: 90 };
-shipGrid[10][5] = { type: 'EJECTOR', block: null, rotation: 0 };
+// Re-oriented Layout: Emitter at Bottom (10, 5) pointing NORTH (0 deg), Ejector at Top (1, 5)
+shipGrid[10][5] = { type: 'EMITTER', block: null, rotation: 0 }; 
+shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 };
 
 // DOM Elements
 const canvas = document.getElementById('ship-canvas');
@@ -74,7 +74,7 @@ function drawGrid() {
         ctx.fillStyle = '#4caf50';
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('START', x + 25, y + 28);
+        ctx.fillText('START (▲)', x + 25, y + 28);
       } else if (tile.type === 'EJECTOR') {
         ctx.fillStyle = '#f44336';
         ctx.font = 'bold 11px sans-serif';
@@ -94,7 +94,7 @@ function drawGrid() {
     }
   }
 
-  // Draw Path Traces
+  // Draw Path Overlay Lines
   if (currentCalculation && currentCalculation.traces) {
     drawPathTraces(currentCalculation.traces);
   }
@@ -113,7 +113,7 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.textAlign = 'center';
   ctx.fillText(blockName.substring(0, 5), 0, 4);
 
-  // Arrowhead pointing forward
+  // Arrowhead pointing forward (North)
   ctx.fillStyle = '#4fc3f7';
   ctx.beginPath();
   ctx.moveTo(0, -18);
@@ -126,8 +126,9 @@ function drawBlock(x, y, blockName, rotation) {
 }
 
 function drawPathTraces(traces) {
-  ctx.strokeStyle = 'rgba(76, 175, 80, 0.6)';
+  ctx.strokeStyle = '#4caf50';
   ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
 
   traces.forEach(trace => {
     if (trace.length < 2) return;
@@ -140,7 +141,7 @@ function drawPathTraces(traces) {
   });
 }
 
-// --- INTERACTION & LOGIC ---
+// --- INTERACTION & EVENT LISTENERS ---
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const c = Math.floor((e.clientX - rect.left) / TILE_SIZE);
@@ -212,6 +213,7 @@ function rotateTile(r, c) {
 function runCalculation() {
   currentCalculation = calculateShip(shipGrid, GRID_SIZE);
   drawGrid();
+  updateUI();
   updateChart(currentCalculation);
 }
 
@@ -231,7 +233,7 @@ function updateUI() {
 
 function updateChart(calcResult) {
   const chartCanvas = document.getElementById('chart-canvas');
-  if (!chartCanvas) return;
+  if (!chartCanvas || !calcResult.dist) return;
 
   const labels = Object.keys(calcResult.dist).map(d => `${d} Dmg`);
   const data = Object.values(calcResult.dist).map(p => (p * 100).toFixed(1));
