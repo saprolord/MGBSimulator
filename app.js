@@ -7,7 +7,7 @@ let shipGrid = Array(GRID_SIZE).fill(null).map(() =>
 );
 
 let selectedTile = { x: -1, y: -1 };
-let selectedPaletteBlock = null; // Default to no block selected
+let selectedPaletteBlock = null;
 let currentCalculation = null;
 let chartInstance = null;
 
@@ -31,7 +31,7 @@ const btnClear = document.getElementById('btn-clear');
 const btnCalc = document.getElementById('btn-calc');
 const paletteContainer = document.getElementById('palette-items');
 
-// --- 1. TOGGLE-ABLE PALETTE SELECTION ---
+// --- PALETTE UI ---
 function buildPaletteUI() {
   paletteContainer.innerHTML = '';
   ITEM_PALETTE.forEach(item => {
@@ -40,7 +40,6 @@ function buildPaletteUI() {
     btn.textContent = item;
     
     btn.addEventListener('click', () => {
-      // Toggle selection: click again to deselect
       if (selectedPaletteBlock === item) {
         selectedPaletteBlock = null;
       } else {
@@ -99,7 +98,6 @@ function drawGrid() {
     }
   }
 
-  // Draw Trajectory Traces
   if (currentCalculation && currentCalculation.traces) {
     drawPathTraces(currentCalculation.traces);
   }
@@ -118,7 +116,7 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.textAlign = 'center';
   ctx.fillText(blockName.substring(0, 5), 0, 4);
 
-  // Arrowhead pointing forward (North)
+  // Arrowhead pointing forward
   ctx.fillStyle = '#4fc3f7';
   ctx.beginPath();
   ctx.moveTo(0, -18);
@@ -130,7 +128,6 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.restore();
 }
 
-// --- 3. EDGE-STOPPED TRAJECTORY DRAWING ---
 function drawPathTraces(traces) {
   ctx.strokeStyle = '#4caf50';
   ctx.lineWidth = 4;
@@ -140,7 +137,6 @@ function drawPathTraces(traces) {
     if (trace.length < 2) return;
     
     ctx.beginPath();
-    // Start at center of initial cell (Emitter)
     let startX = trace[0].c * TILE_SIZE + 25;
     let startY = trace[0].r * TILE_SIZE + 25;
     ctx.moveTo(startX, startY);
@@ -153,16 +149,12 @@ function drawPathTraces(traces) {
       let targetX = currCell.c * TILE_SIZE + 25;
       let targetY = currCell.r * TILE_SIZE + 25;
 
-      // Check if path terminates/stops on this last node
       if (isLast) {
         const targetTile = shipGrid[currCell.r][currCell.c];
-        
-        // Stop line at edge of block/wall instead of center if hit invalid face or wall
         if (targetTile.type === 'WALL' || (targetTile.type === 'SPACE' && targetTile.block)) {
           let dc = currCell.c - prevCell.c;
           let dr = currCell.r - prevCell.r;
 
-          // Adjust destination back to the edge boundary of the cell
           targetX = currCell.c * TILE_SIZE + 25 - (dc * 25);
           targetY = currCell.r * TILE_SIZE + 25 - (dr * 25);
         }
@@ -172,6 +164,30 @@ function drawPathTraces(traces) {
     }
     ctx.stroke();
   });
+}
+
+// --- HELPER: FIND TRAJECTORY DIRECTION AT CELL ---
+function getIncomingDirectionAt(targetR, targetC) {
+  if (!currentCalculation || !currentCalculation.traces) return null;
+
+  for (let trace of currentCalculation.traces) {
+    for (let i = 0; i < trace.length; i++) {
+      if (trace[i].r === targetR && trace[i].c === targetC) {
+        // If it's not the start node, derive direction from previous node
+        if (i > 0) {
+          let prev = trace[i - 1];
+          let dr = targetR - prev.r;
+          let dc = targetC - prev.c;
+
+          if (dr === -1 && dc === 0) return 0;   // Moving North
+          if (dr === 0  && dc === 1) return 90;  // Moving East
+          if (dr === 1  && dc === 0) return 180; // Moving South
+          if (dr === 0  && dc === -1) return 270;// Moving West
+        }
+      }
+    }
+  }
+  return null;
 }
 
 // --- INTERACTION LISTENERS ---
@@ -184,9 +200,14 @@ canvas.addEventListener('click', (e) => {
     selectedTile = { x: c, y: r };
     const tile = shipGrid[r][c];
 
-    // Place active palette block if one is selected
     if (tile.type === 'SPACE' && selectedPaletteBlock) {
       tile.block = selectedPaletteBlock;
+
+      // Auto-align rotation to incoming trajectory if placed along an active line
+      const incomingDir = getIncomingDirectionAt(r, c);
+      if (incomingDir !== null) {
+        tile.rotation = incomingDir;
+      }
     }
 
     updateUI();
@@ -260,8 +281,11 @@ function updateUI() {
   }
 
   if (currentCalculation) {
-    document.getElementById('kpi-ev').textContent = currentCalculation.ev;
-    document.getElementById('kpi-range').textContent = `${currentCalculation.min} / ${currentCalculation.max}`;
+    const evElem = document.getElementById('kpi-ev');
+    const rangeElem = document.getElementById('kpi-range');
+
+    if (evElem) evElem.textContent = `${currentCalculation.ev} DPS`;
+    if (rangeElem) rangeElem.textContent = `${currentCalculation.min} / ${currentCalculation.max} DPS`;
   }
 }
 
@@ -269,7 +293,8 @@ function updateChart(calcResult) {
   const chartCanvas = document.getElementById('chart-canvas');
   if (!chartCanvas || !calcResult.dist) return;
 
-  const labels = Object.keys(calcResult.dist).map(d => `${d} Dmg`);
+  // Chart labels explicitly styled as DPS values
+  const labels = Object.keys(calcResult.dist).map(d => `${d} DPS`);
   const data = Object.values(calcResult.dist).map(p => (p * 100).toFixed(1));
 
   if (chartInstance) {
@@ -289,6 +314,7 @@ function updateChart(calcResult) {
     options: {
       responsive: true,
       scales: {
+        x: { title: { display: true, text: 'Damage Output (DPS)' } },
         y: { beginAtZero: true, max: 100, title: { display: true, text: 'Chance (%)' } }
       }
     }
