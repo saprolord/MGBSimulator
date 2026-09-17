@@ -97,18 +97,17 @@ function buildPaletteUI() {
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // LAYER 1: Base Tile Backgrounds & Grid Lines
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       const tile = shipGrid[r][c];
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      // 1. Draw Base Tile Background (SPACE, EMITTER, EJECTOR, WALL)
       const baseImg = loadedImages[tile.type];
       if (baseImg && baseImg.complete) {
         ctx.drawImage(baseImg, x, y, TILE_SIZE, TILE_SIZE);
       } else {
-        // Fallback color while loading
         ctx.fillStyle = tile.type === 'EMITTER' ? '#1e3a1e' : 
                         tile.type === 'EJECTOR' ? '#3a1e1e' : '#222222';
         ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
@@ -117,8 +116,22 @@ function drawGrid() {
       ctx.strokeStyle = '#333333';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+    }
+  }
 
-      // 2. Draw Modifier Block
+  // LAYER 2: Trajectory Lines (Drawn UNDER blocks, OVER base tiles)
+  if (currentCalculation && currentCalculation.traces) {
+    drawPathTraces(currentCalculation.traces);
+  }
+
+  // LAYER 3: Modifier Blocks & Selection Highlights (Drawn OVER trajectory)
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const tile = shipGrid[r][c];
+      const x = c * TILE_SIZE;
+      const y = r * TILE_SIZE;
+
+      // Draw Modifier Block over path
       if (tile.block) {
         drawBlock(x, y, tile.block, tile.rotation);
       }
@@ -130,10 +143,6 @@ function drawGrid() {
         ctx.strokeRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
       }
     }
-  }
-
-  if (currentCalculation && currentCalculation.traces) {
-    drawPathTraces(currentCalculation.traces);
   }
 }
 
