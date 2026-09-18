@@ -229,8 +229,17 @@ function getIncomingDirectionAt(targetR, targetC) {
 // --- INTERACTION LISTENERS ---
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
-  const c = Math.floor((e.clientX - rect.left) / TILE_SIZE);
-  const r = Math.floor((e.clientY - rect.top) / TILE_SIZE);
+  
+  // Calculate scaling factor between rendered CSS size and internal pixel size
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  // Convert click coordinates to internal canvas coordinates
+  const canvasX = (e.clientX - rect.left) * scaleX;
+  const canvasY = (e.clientY - rect.top) * scaleY;
+
+  const c = Math.floor(canvasX / TILE_SIZE);
+  const r = Math.floor(canvasY / TILE_SIZE);
 
   if (c >= 0 && c < GRID_SIZE && r >= 0 && r < GRID_SIZE) {
     selectedTile = { x: c, y: r };
@@ -254,8 +263,17 @@ canvas.addEventListener('click', (e) => {
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
-  const c = Math.floor((e.clientX - rect.left) / TILE_SIZE);
-  const r = Math.floor((e.clientY - rect.top) / TILE_SIZE);
+
+  // Calculate scaling factor between rendered CSS size and internal pixel size
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  // Convert click coordinates to internal canvas coordinates
+  const canvasX = (e.clientX - rect.left) * scaleX;
+  const canvasY = (e.clientY - rect.top) * scaleY;
+
+  const c = Math.floor(canvasX / TILE_SIZE);
+  const r = Math.floor(canvasY / TILE_SIZE);
 
   if (c >= 0 && c < GRID_SIZE && r >= 0 && r < GRID_SIZE) {
     rotateTile(r, c);

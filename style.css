@@ -1,42 +1,111 @@
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-body { background: #1a1a1a; color: #fff; padding: 15px; }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-
-/* Fixed: Expanded sidebar column from 200px to 260px to give 4 square columns room to breathe */
-.app-container { display: grid; grid-template-columns: 260px 1fr 300px; gap: 15px; }
-
-canvas { background: #2a2a2a; border-radius: 8px; cursor: pointer; }
-.palette { background: #222; padding: 10px; border-radius: 8px; }
-.action-bar { margin-top: 10px; display: flex; gap: 10px; align-items: center; }
-button { padding: 8px 12px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer; }
-button.primary { background: #007acc; }
-
-/* Sidebar Panel Layout */
-.palette-panel {
-  width: 100%;
-  box-sizing: border-box;
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+  font-family: sans-serif; 
 }
 
-/* Palette Container Grid - 4 Equal Columns */
-#palette-items {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px; /* Tightened gap slightly */
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 10px;
+body { 
+  background: #1a1a1a; 
+  color: #fff; 
+  padding: 15px; 
 }
 
-/* Square Palette Buttons */
-.palette-btn {
+header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 15px; 
+}
+
+button { 
+  padding: 8px 12px; 
+  background: #444; 
+  color: white; 
+  border: none; 
+  border-radius: 4px; 
+  cursor: pointer; 
+}
+
+button.primary { 
+  background: #007acc; 
+}
+
+/* ==========================================================================
+   DEFAULT LAYOUT: Desktop / Wide Screens
+   15% Item Palette | 55% Main Canvas | 30% Stats Panel
+   ========================================================================== */
+.app-container { 
+  display: grid; 
+  /* minmax(130px, 15%) guarantees the panel never shrinks below 2 columns */
+  grid-template-columns: minmax(130px, 15%) 1fr 30%; 
+  gap: 15px; 
+  align-items: start;
+}
+
+/* Central Canvas Area */
+.canvas-area {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+canvas#ship-canvas { 
+  background: #2a2a2a; 
+  border-radius: 8px; 
+  cursor: pointer; 
+  width: 100%;
+  height: auto;
   aspect-ratio: 1 / 1;
+}
+
+.action-bar { 
+  margin-top: 10px; 
+  display: flex; 
+  gap: 10px; 
+  align-items: center; 
+  flex-wrap: wrap;
+}
+
+/* Items Library Panel */
+.palette { 
+  background: #222; 
+  padding: 10px; 
+  border-radius: 8px; 
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  min-width: 0; /* Lets panel shrink smoothly down to the grid minimum */
+  overflow: hidden;
+}
+
+.palette h3 {
+  margin-bottom: 8px;
+}
+
+/* Palette Container - Packs fixed-size items automatically */
+#palette-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px; 
   width: 100%;
-  min-width: 0; /* CRITICAL: Prevents long text from blowing out grid columns */
+  overflow-y: auto;
+  padding-right: 4px;
+  flex-grow: 1;
+}
+
+/* Fixed-Size Square Buttons */
+.palette-btn {
+  width: 50px;       /* Fixed button width */
+  height: 50px;      /* Fixed button height */
+  flex-shrink: 0;    /* Prevents buttons from shrinking on small screens */
   background-color: #2b2b2b;
   color: #ffffff;
   border: 2px solid #444444;
   border-radius: 6px;
-  font-size: 9px; /* Slightly smaller text for 4-column fit */
+  font-size: 9px;
   font-weight: bold;
   cursor: pointer;
   display: flex;
@@ -44,7 +113,6 @@ button.primary { background: #007acc; }
   justify-content: center;
   text-align: center;
   padding: 2px;
-  box-sizing: border-box;
   overflow: hidden;
   word-break: break-word;
   transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -54,9 +122,75 @@ button.primary { background: #007acc; }
   background-color: #3a3a3a;
 }
 
-/* Green Highlight for Selected Block */
+/* Selected Block Highlight */
 .palette-btn.active {
   border: 2px solid #4caf50;
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.6);
   background-color: #1e3a1e;
+}
+
+/* Right Panel: Damage Stats */
+.results-panel {
+  background: #222;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.kpi-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.card {
+  background: #2b2b2b;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+canvas#chart-canvas {
+  width: 100% !important;
+  margin-top: 10px;
+}
+
+/* ==========================================================================
+   MOBILE & NARROW SCREENS (Portrait / Mobile Devices)
+   10% Items Library | 90% Grid Canvas
+   100% Full Width Scrollable Damage Stats at Bottom
+   ========================================================================== */
+@media screen and (max-width: 850px) {
+  .app-container {
+    /* minmax(122px, 15%) guarantees enough width for 2 columns without bleeding */
+    grid-template-columns: minmax(55px, 15%) 1fr;
+    grid-template-areas:
+      "palette canvas"
+      "results results";
+    gap: 10px;
+  }
+
+  .palette {
+    grid-area: palette;
+    padding: 6px;
+  }
+
+  /* Force palette container to fit 2 fixed 50px columns neatly */
+  #palette-items {
+    gap: 4px;
+    padding-right: 2px;
+  }
+
+  .canvas-area {
+    grid-area: canvas;
+    min-width: 0; /* Prevents canvas flex child from overflowing screen */
+  }
+
+  /* Full Width Bottom Panel */
+  .results-panel {
+    grid-area: results;
+    width: 100%;
+    margin-top: 10px;
+  }
 }
