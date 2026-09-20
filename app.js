@@ -11,9 +11,9 @@ let selectedPaletteBlock = null;
 let currentCalculation = null;
 let chartInstance = null;
 
-//Default ship base damage
-let baseDamage=1;
-let baseFireRate=1;
+// Default ship base damage
+let baseDamage = 1;
+let baseFireRate = 1;
 
 // Available Items
 const ITEM_PALETTE = [
@@ -29,14 +29,14 @@ shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 };
 const canvas = document.getElementById('ship-canvas');
 const ctx = canvas.getContext('2d');
 const selectedInfo = document.getElementById('selected-info');
-const btnRotate = document.getElementById('btn-rotate');
+const btnRotateCW = document.getElementById('btn-rotate-cw');
+const btnRotateCCW = document.getElementById('btn-rotate-ccw');
 const btnDelete = document.getElementById('btn-delete');
 const btnClear = document.getElementById('btn-clear');
 const btnCalc = document.getElementById('btn-calc');
 const paletteContainer = document.getElementById('palette-items');
 
 // --- IMAGE ASSET CONFIGURATION ---
-// Update these file paths to match your assets folder structure
 const BLOCK_IMAGES = {
   'EMITTER':        'Images/Projectile_generator.webp',
   'EJECTOR':        'Images/Ejection_block.webp',
@@ -55,7 +55,7 @@ const loadedImages = {};
 Object.entries(BLOCK_IMAGES).forEach(([key, src]) => {
   const img = new Image();
   img.src = src;
-  img.onload = () => drawGrid(); // Redraw canvas once images load
+  img.onload = () => drawGrid();
   loadedImages[key] = img;
 });
 
@@ -65,9 +65,8 @@ function buildPaletteUI() {
   ITEM_PALETTE.forEach(item => {
     const btn = document.createElement('button');
     btn.className = 'palette-btn' + (item === selectedPaletteBlock ? ' active' : '');
-    btn.title = item; // Tooltip on hover
+    btn.title = item;
     
-    // Add image element inside button
     if (BLOCK_IMAGES[item]) {
       const img = document.createElement('img');
       img.src = BLOCK_IMAGES[item];
@@ -82,18 +81,29 @@ function buildPaletteUI() {
 
     btn.addEventListener('click', () => {
       if (selectedPaletteBlock === item) {
-        selectedPaletteBlock = null;
+        deselectPaletteBlock();
       } else {
         selectedPaletteBlock = item;
       }
-
-      document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
-      if (selectedPaletteBlock) {
-        btn.classList.add('active');
-      }
+      updatePaletteHighlight();
     });
     
     paletteContainer.appendChild(btn);
+  });
+}
+
+function deselectPaletteBlock() {
+  selectedPaletteBlock = null;
+  updatePaletteHighlight();
+}
+
+function updatePaletteHighlight() {
+  document.querySelectorAll('.palette-btn').forEach(b => {
+    if (b.title === selectedPaletteBlock) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
   });
 }
 
@@ -123,24 +133,22 @@ function drawGrid() {
     }
   }
 
-  // LAYER 2: Trajectory Lines (Drawn UNDER blocks, OVER base tiles)
+  // LAYER 2: Trajectory Lines
   if (currentCalculation && currentCalculation.traces) {
     drawPathTraces(currentCalculation.traces);
   }
 
-  // LAYER 3: Modifier Blocks & Selection Highlights (Drawn OVER trajectory)
+  // LAYER 3: Modifier Blocks & Selection Highlights
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       const tile = shipGrid[r][c];
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      // Draw Modifier Block over path
       if (tile.block) {
         drawBlock(x, y, tile.block, tile.rotation);
       }
 
-      // Selection Highlight
       if (selectedTile.x === c && selectedTile.y === r) {
         ctx.strokeStyle = '#007acc';
         ctx.lineWidth = 3;
@@ -157,10 +165,8 @@ function drawBlock(x, y, blockName, rotation) {
 
   const img = loadedImages[blockName];
   if (img && img.complete) {
-    // Draw rotated image inside tile
     ctx.drawImage(img, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
   } else {
-    // Fallback block render
     ctx.fillStyle = blockName.includes('Damage') ? '#8e24aa' : '#005f9e';
     ctx.fillRect(-20, -20, 40, 40);
   }
@@ -206,14 +212,12 @@ function drawPathTraces(traces) {
   });
 }
 
-// --- HELPER: FIND TRAJECTORY DIRECTION AT CELL ---
 function getIncomingDirectionAt(targetR, targetC) {
   if (!currentCalculation || !currentCalculation.traces) return null;
 
   for (let trace of currentCalculation.traces) {
     for (let i = 0; i < trace.length; i++) {
       if (trace[i].r === targetR && trace[i].c === targetC) {
-        // If it's not the start node, derive direction from previous node
         if (i > 0) {
           let prev = trace[i - 1];
           let dr = targetR - prev.r;
@@ -230,15 +234,34 @@ function getIncomingDirectionAt(targetR, targetC) {
   return null;
 }
 
-// --- INTERACTION LISTENERS ---
+// --- INTERACTION ACTIONS ---
+function deleteSelectedTile() {
+  if (selectedTile.x !== -1) {
+    const tile = shipGrid[selectedTile.y][selectedTile.x];
+    if (tile.type === 'SPACE' && tile.block) {
+      tile.block = null;
+      tile.rotation = 0;
+      updateUI();
+      runCalculation();
+    }
+  }
+}
+
+function rotateTile(r, c, direction = 'cw') {
+  const tile = shipGrid[r][c];
+  if (tile.block) {
+    const step = direction === 'ccw' ? -90 : 90;
+    tile.rotation = (tile.rotation + step + 360) % 360;
+    runCalculation();
+  }
+}
+
+// --- LISTENERS ---
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
-  
-  // Calculate scaling factor between rendered CSS size and internal pixel size
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
 
-  // Convert click coordinates to internal canvas coordinates
   const canvasX = (e.clientX - rect.left) * scaleX;
   const canvasY = (e.clientY - rect.top) * scaleY;
 
@@ -252,7 +275,6 @@ canvas.addEventListener('click', (e) => {
     if (tile.type === 'SPACE' && selectedPaletteBlock) {
       tile.block = selectedPaletteBlock;
 
-      // Auto-align rotation to incoming trajectory if placed along an active line
       const incomingDir = getIncomingDirectionAt(r, c);
       if (incomingDir !== null) {
         tile.rotation = incomingDir;
@@ -267,12 +289,9 @@ canvas.addEventListener('click', (e) => {
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
-
-  // Calculate scaling factor between rendered CSS size and internal pixel size
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
 
-  // Convert click coordinates to internal canvas coordinates
   const canvasX = (e.clientX - rect.left) * scaleX;
   const canvasY = (e.clientY - rect.top) * scaleY;
 
@@ -280,25 +299,34 @@ canvas.addEventListener('contextmenu', (e) => {
   const r = Math.floor(canvasY / TILE_SIZE);
 
   if (c >= 0 && c < GRID_SIZE && r >= 0 && r < GRID_SIZE) {
-    rotateTile(r, c);
+    rotateTile(r, c, 'cw');
   }
 });
 
-btnRotate.addEventListener('click', () => {
-  if (selectedTile.x !== -1) rotateTile(selectedTile.y, selectedTile.x);
-});
-
-btnDelete.addEventListener('click', () => {
-  if (selectedTile.x !== -1) {
-    const tile = shipGrid[selectedTile.y][selectedTile.x];
-    if (tile.type === 'SPACE') {
-      tile.block = null;
-      tile.rotation = 0;
+// Keyboard Shortcuts
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    deleteSelectedTile();
+  } else if (e.key === 'Escape') {
+    if (selectedPaletteBlock !== null) {
+      deselectPaletteBlock();
+    } else {
+      selectedTile = { x: -1, y: -1 };
       updateUI();
-      runCalculation();
+      drawGrid();
     }
   }
 });
+
+btnRotateCW.addEventListener('click', () => {
+  if (selectedTile.x !== -1) rotateTile(selectedTile.y, selectedTile.x, 'cw');
+});
+
+btnRotateCCW.addEventListener('click', () => {
+  if (selectedTile.x !== -1) rotateTile(selectedTile.y, selectedTile.x, 'ccw');
+});
+
+btnDelete.addEventListener('click', deleteSelectedTile);
 
 btnClear.addEventListener('click', () => {
   for (let r = 0; r < GRID_SIZE; r++) {
@@ -315,14 +343,7 @@ btnClear.addEventListener('click', () => {
 
 btnCalc.addEventListener('click', runCalculation);
 
-function rotateTile(r, c) {
-  const tile = shipGrid[r][c];
-  if (tile.block) {
-    tile.rotation = (tile.rotation + 90) % 360;
-    runCalculation();
-  }
-}
-
+// --- CALCULATION & CHART UI ---
 function runCalculation() {
   currentCalculation = calculateShip(shipGrid, GRID_SIZE, baseDamage, baseFireRate);
   drawGrid();
@@ -351,9 +372,12 @@ function updateChart(calcResult) {
   const chartCanvas = document.getElementById('chart-canvas');
   if (!chartCanvas || !calcResult.dist) return;
 
-  // Chart labels explicitly styled as DPS values
-  const labels = Object.keys(calcResult.dist).map(d => `${d} `);
-  const data = Object.values(calcResult.dist).map(p => (p * 100).toFixed(1));
+  const labels = Object.keys(calcResult.dist).map(d => `${d} DPS`);
+  const probabilities = Object.values(calcResult.dist).map(p => p * 100);
+
+  // 1. Calculate peak probability and round UP to the nearest 10%
+  const maxProb = Math.max(...probabilities, 0);
+  const yMax = Math.min(100, Math.ceil(maxProb / 10) * 10 || 10); // Minimum scale of 10%
 
   if (chartInstance) {
     chartInstance.destroy();
@@ -365,15 +389,41 @@ function updateChart(calcResult) {
       labels: labels,
       datasets: [{
         label: 'Probability (%)',
-        data: data,
-        backgroundColor: '#007acc'
+        data: probabilities.map(p => p.toFixed(1)),
+        backgroundColor: '#007acc',
+        borderColor: '#0094f0',
+        borderWidth: 1,
+        maxBarThickness: 30 // Fix 1: Caps bar width so single/few bars don't stretch
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }, // Hiding redundant legend frees up vertical chart space
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Chance: ${ctx.parsed.y}%`
+          }
+        }
+      },
       scales: {
-        x: { title: { display: true, text: 'Damage Output (DPS)' } },
-        y: { beginAtZero: true, max: 100, title: { display: true, text: 'Chance (%)' } }
+        x: { 
+          title: { display: true, text: 'Damage Output', color: '#888888', font: { size: 11 } },
+          ticks: { color: '#cccccc' },
+          grid: { display: false }
+        },
+        y: { 
+          beginAtZero: true, 
+          max: yMax, // Fix 2: Dynamic ceiling rounded to nearest 10%
+          title: { display: true, text: 'Chance (%)', color: '#888888', font: { size: 11 } },
+          ticks: { 
+            color: '#cccccc',
+            stepSize: yMax <= 20 ? 2 : (yMax <= 50 ? 5 : 10), // Smart tick steps based on scale
+            callback: (val) => `${val}%`
+          },
+          grid: { color: '#333333' }
+        }
       }
     }
   });
