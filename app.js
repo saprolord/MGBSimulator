@@ -11,6 +11,10 @@ let selectedPaletteBlock = null;
 let currentCalculation = null;
 let chartInstance = null;
 
+//Default ship base damage
+let baseDamage=1;
+let baseFireRate=1;
+
 // Available Items
 const ITEM_PALETTE = [
   'Turn Right', 'Turn Left', 'Dual Splitter',
@@ -320,7 +324,7 @@ function rotateTile(r, c) {
 }
 
 function runCalculation() {
-  currentCalculation = calculateShip(shipGrid, GRID_SIZE);
+  currentCalculation = calculateShip(shipGrid, GRID_SIZE, baseDamage, baseFireRate);
   drawGrid();
   updateUI();
   updateChart(currentCalculation);

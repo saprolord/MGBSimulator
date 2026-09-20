@@ -12,7 +12,8 @@ function normDir(dir) {
   return (dir % 360 + 360) % 360;
 }
 
-function calculateShip(shipGrid, gridSize) {
+function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1) {
+  // Find emitter location
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
@@ -25,12 +26,14 @@ function calculateShip(shipGrid, gridSize) {
 
   if (!emitter) return { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
 
+  // Set emitter as the first active node
   let activeNodes = [{
     r: emitter.r,
     c: emitter.c,
     dir: emitter.dir,
-    damageDist: new Map([[1, 1.0]]),
-    pathTrace: [{ r: emitter.r, c: emitter.c }]
+    damageDist: new Map([[baseDamage, 1.0]]),
+    pathTrace: [{ r: emitter.r, c: emitter.c }],
+    isOriginal: true // Primary original projectile stream
   }];
 
   let ejectorHits = [];
@@ -70,21 +73,20 @@ function calculateShip(shipGrid, gridSize) {
 
     if (targetTile.type === 'SPACE') {
       if (!targetTile.block) {
-        // Rule 0: Pass straight through open space
+        // Rule 0: Pass straight through open space (PRESERVE isOriginal!)
         activeNodes.push({
           r: nextR, c: nextC, dir: currentNode.dir,
-          damageDist: currentNode.damageDist, pathTrace: newTrace
+          damageDist: currentNode.damageDist, pathTrace: newTrace,
+          isOriginal: currentNode.isOriginal ?? true
         });
       } else {
         // --- RULE 1: ENTRY POINT VALIDATION ---
-        // A block at rotation R has its unique entry point facing (R + 180) deg.
-        // For a projectile traveling in direction D to ENTER this face, D must EQUAL R.
         const requiredTravelDir = normDir(targetTile.rotation);
 
         if (currentNode.dir === requiredTravelDir) {
           processModifierBlock(targetTile, currentNode, nextR, nextC, newTrace, activeNodes, allTraces);
         } else {
-          // Rule 1 Violation: Did not enter via entry point -> Trajectory stops here (trace kept)
+          // Rule 1 Violation: Did not enter via entry point -> Trajectory stops here
           allTraces.push(newTrace);
         }
       }
@@ -97,60 +99,72 @@ function calculateShip(shipGrid, gridSize) {
 function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
   const blockRot = normDir(tile.rotation);
   let newDist = new Map(node.damageDist);
+  const isOrig = node.isOriginal ?? true; // Safe fallback guarantee
 
   switch (tile.block) {
     case 'Turn Left':
-      // Rule 3: Rotate 90 deg counter-clockwise (Left relative to block orientation)
       activeNodes.push({
         r, c, dir: normDir(blockRot - 90),
-        damageDist: newDist, pathTrace: trace
+        damageDist: newDist, pathTrace: trace,
+        isOriginal: isOrig
       });
       break;
 
     case 'Turn Right':
-      // Rule 4: Rotate 90 deg clockwise (Right relative to block orientation)
       activeNodes.push({
         r, c, dir: normDir(blockRot + 90),
-        damageDist: newDist, pathTrace: trace
-      });
-      break;
-
-    case 'Dual Splitter':
-      // Rule 5: Two exits at 90 deg CW and 90 deg CCW
-      activeNodes.push({
-        r, c, dir: normDir(blockRot - 90),
-        damageDist: new Map(newDist), pathTrace: [...trace]
-      });
-      activeNodes.push({
-        r, c, dir: normDir(blockRot + 90),
-        damageDist: new Map(newDist), pathTrace: [...trace]
-      });
-      break;
-
-    case '+1 Damage':
-      // Rule 2: Straight exit line (dir = blockRot), adds +1 damage
-      let addDist = new Map();
-      newDist.forEach((prob, dmg) => addDist.set(dmg + 1, prob));
-      activeNodes.push({
-        r, c, dir: blockRot,
-        damageDist: addDist, pathTrace: trace
+        damageDist: newDist, pathTrace: trace,
+        isOriginal: isOrig
       });
       break;
 
     case '+1 Projectile':
-      // Rule 2: Straight exit line (dir = blockRot), duplicates projectile
+      // 1. Primary projectile continues forward
       activeNodes.push({
         r, c, dir: blockRot,
-        damageDist: new Map(newDist), pathTrace: [...trace]
+        damageDist: new Map(newDist),
+        pathTrace: [...trace],
+        isOriginal: isOrig
+      });
+
+      // 2. Duplicate projectile is spawned ONLY if incoming projectile is original
+      if (isOrig) {
+        activeNodes.push({
+          r, c, dir: blockRot,
+          damageDist: new Map(newDist),
+          pathTrace: [...trace],
+          isOriginal: false // Marked as duplicate -> won't duplicate at future +1 Projectile blocks
+        });
+      }
+      break;
+
+    case 'Dual Splitter':
+      // Physical path split: Clones ALL incoming projectiles into both exit directions
+      activeNodes.push({
+        r, c, dir: normDir(blockRot - 90),
+        damageDist: new Map(newDist),
+        pathTrace: [...trace],
+        isOriginal: isOrig
       });
       activeNodes.push({
+        r, c, dir: normDir(blockRot + 90),
+        damageDist: new Map(newDist),
+        pathTrace: [...trace],
+        isOriginal: isOrig
+      });
+      break;
+
+    case '+1 Damage':
+      let addDist = new Map();
+      newDist.forEach((prob, dmg) => addDist.set(dmg + 1, prob));
+      activeNodes.push({
         r, c, dir: blockRot,
-        damageDist: new Map(newDist), pathTrace: [...trace]
+        damageDist: addDist, pathTrace: trace,
+        isOriginal: isOrig
       });
       break;
 
     case '33% x2 Damage':
-      // Rule 2: Straight exit line (dir = blockRot), 33% chance x2 damage
       let multDist = new Map();
       newDist.forEach((prob, dmg) => {
         let d2 = dmg * 2;
@@ -159,7 +173,8 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
       });
       activeNodes.push({
         r, c, dir: blockRot,
-        damageDist: multDist, pathTrace: trace
+        damageDist: multDist, pathTrace: trace,
+        isOriginal: isOrig
       });
       break;
 
@@ -169,20 +184,44 @@ function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
   }
 }
 
+function combineEjectedDistributions(ejectedDistributions) {
+  if (ejectedDistributions.length === 0) {
+    return { 0: 1.0 };
+  }
+
+  let currentDist = new Map([[0, 1.0]]);
+
+  for (const projDist of ejectedDistributions) {
+    const nextDist = new Map();
+
+    for (const [dmgA, probA] of currentDist.entries()) {
+      for (const [dmgB, probB] of projDist.entries()) {
+        const totalDmg = dmgA + dmgB;
+        const totalProb = probA * probB;
+        const existingProb = nextDist.get(totalDmg) || 0;
+        
+        nextDist.set(totalDmg, existingProb + totalProb);
+      }
+    }
+    currentDist = nextDist;
+  }
+
+  const resultObj = {};
+  for (const [dmg, prob] of currentDist.entries()) {
+    resultObj[dmg] = prob;
+  }
+  return resultObj;
+}
+
 function aggregateResults(ejectorHits, allTraces) {
-  let combinedDist = {};
   let totalEjected = ejectorHits.length;
 
   if (totalEjected === 0) {
     return { traces: allTraces, totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
   }
 
-  ejectorHits.forEach(hit => {
-    hit.damageDist.forEach((prob, dmg) => {
-      let weightedProb = prob / totalEjected;
-      combinedDist[dmg] = (combinedDist[dmg] || 0) + weightedProb;
-    });
-  });
+  const ejectedDists = ejectorHits.map(hit => hit.damageDist);
+  const combinedDist = combineEjectedDistributions(ejectedDists);
 
   let ev = 0;
   let min = Infinity;
@@ -198,7 +237,7 @@ function aggregateResults(ejectorHits, allTraces) {
   return {
     traces: allTraces,
     totalEjected,
-    ev: (ev * totalEjected).toFixed(2),
+    ev: Number(ev.toFixed(2)),
     min: min === Infinity ? 0 : min,
     max: max === -Infinity ? 0 : max,
     dist: combinedDist
