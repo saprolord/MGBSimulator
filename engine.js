@@ -26,202 +26,220 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1) {
 
   if (!emitter) return { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
 
-  // Set emitter as the first active node
-  let activeNodes = [{
-    r: emitter.r,
-    c: emitter.c,
-    dir: emitter.dir,
-    damageDist: new Map([[baseDamage, 1.0]]),
-    pathTrace: [{ r: emitter.r, c: emitter.c }],
-    isOriginal: true // Primary original projectile stream
+  // A "World State" tracks a joint probability outcome across all branched paths.
+  let worldStates = [{
+    prob: 1.0,
+    activeNodes: [{
+      r: emitter.r,
+      c: emitter.c,
+      dir: emitter.dir,
+      damage: baseDamage,
+      pathTrace: [{ r: emitter.r, c: emitter.c }],
+      isOriginal: true
+    }],
+    totalEjectedDamage: 0
   }];
 
-  let ejectorHits = [];
+  let completedWorlds = [];
   let allTraces = [];
   let steps = 0;
   const maxSteps = 2000;
 
-  while (activeNodes.length > 0 && steps < maxSteps) {
+  while (worldStates.length > 0 && steps < maxSteps) {
     steps++;
-    let currentNode = activeNodes.pop();
-    const vec = DIR_VECTORS[currentNode.dir];
+    let nextWorldStates = [];
 
-    let nextR = currentNode.r + vec.dr;
-    let nextC = currentNode.c + vec.dc;
+    for (let world of worldStates) {
+      if (world.activeNodes.length === 0) {
+        completedWorlds.push(world);
+        continue;
+      }
 
-    // Out of grid bounds -> Stop trajectory & store trace
-    if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
-      allTraces.push(currentNode.pathTrace);
-      continue;
-    }
+      // Process all current active nodes in this world state concurrently
+      let currentNodes = world.activeNodes;
+      let newWorldBranches = [{ prob: world.prob, activeNodes: [], totalEjectedDamage: world.totalEjectedDamage }];
 
-    const targetTile = shipGrid[nextR][nextC];
-    let newTrace = [...currentNode.pathTrace, { r: nextR, c: nextC }];
+      for (let node of currentNodes) {
+        const vec = DIR_VECTORS[node.dir];
+        let nextR = node.r + vec.dr;
+        let nextC = node.c + vec.dc;
 
-    // Hit Wall -> Stop trajectory & store trace
-    if (targetTile.type === 'WALL') {
-      allTraces.push(newTrace);
-      continue;
-    }
+        // Out of bounds -> stop trace
+        if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
+          allTraces.push(node.pathTrace);
+          continue;
+        }
 
-    // Hit Ejector -> Register hit & store trace
-    if (targetTile.type === 'EJECTOR') {
-      ejectorHits.push({ damageDist: currentNode.damageDist, pathTrace: newTrace });
-      allTraces.push(newTrace);
-      continue;
-    }
+        const targetTile = shipGrid[nextR][nextC];
+        let newTrace = [...node.pathTrace, { r: nextR, c: nextC }];
 
-    if (targetTile.type === 'SPACE') {
-      if (!targetTile.block) {
-        // Rule 0: Pass straight through open space (PRESERVE isOriginal!)
-        activeNodes.push({
-          r: nextR, c: nextC, dir: currentNode.dir,
-          damageDist: currentNode.damageDist, pathTrace: newTrace,
-          isOriginal: currentNode.isOriginal ?? true
-        });
-      } else {
-        // --- RULE 1: ENTRY POINT VALIDATION ---
-        const requiredTravelDir = normDir(targetTile.rotation);
-
-        if (currentNode.dir === requiredTravelDir) {
-          processModifierBlock(targetTile, currentNode, nextR, nextC, newTrace, activeNodes, allTraces);
-        } else {
-          // Rule 1 Violation: Did not enter via entry point -> Trajectory stops here
+        // Hit Wall -> stop trace
+        if (targetTile.type === 'WALL') {
           allTraces.push(newTrace);
+          continue;
+        }
+
+        // Hit Ejector -> Register damage output & stop trace
+        if (targetTile.type === 'EJECTOR') {
+          for (let w of newWorldBranches) {
+            w.totalEjectedDamage += node.damage;
+          }
+          allTraces.push(newTrace);
+          continue;
+        }
+
+        if (targetTile.type === 'SPACE') {
+          if (!targetTile.block) {
+            // Rule 0: Move straight through empty tile
+            for (let w of newWorldBranches) {
+              w.activeNodes.push({
+                r: nextR, c: nextC, dir: node.dir,
+                damage: node.damage, pathTrace: newTrace,
+                isOriginal: node.isOriginal ?? true
+              });
+            }
+          } else {
+            // Rule 1: Validate entry direction
+            const requiredTravelDir = normDir(targetTile.rotation);
+            if (node.dir === requiredTravelDir) {
+              newWorldBranches = processModifierBlockWorld(
+                targetTile, node, nextR, nextC, newTrace, newWorldBranches, allTraces
+              );
+            } else {
+              // Direction mismatch -> stop trace
+              allTraces.push(newTrace);
+            }
+          }
         }
       }
+
+      nextWorldStates.push(...newWorldBranches);
     }
+
+    worldStates = nextWorldStates;
   }
 
-  return aggregateResults(ejectorHits, allTraces);
+  // Include any remaining un-completed worlds
+  completedWorlds.push(...worldStates);
+
+  return aggregateResults(completedWorlds, allTraces);
 }
 
-function processModifierBlock(tile, node, r, c, trace, activeNodes, allTraces) {
+function processModifierBlockWorld(tile, node, r, c, trace, worldBranches, allTraces) {
   const blockRot = normDir(tile.rotation);
-  let newDist = new Map(node.damageDist);
-  const isOrig = node.isOriginal ?? true; // Safe fallback guarantee
+  const isOrig = node.isOriginal ?? true;
+  let expandedBranches = [];
 
-  switch (tile.block) {
-    case 'Turn Left':
-      activeNodes.push({
-        r, c, dir: normDir(blockRot - 90),
-        damageDist: newDist, pathTrace: trace,
-        isOriginal: isOrig
-      });
-      break;
-
-    case 'Turn Right':
-      activeNodes.push({
-        r, c, dir: normDir(blockRot + 90),
-        damageDist: newDist, pathTrace: trace,
-        isOriginal: isOrig
-      });
-      break;
-
-    case '+1 Projectile':
-      // 1. Primary projectile continues forward
-      activeNodes.push({
-        r, c, dir: blockRot,
-        damageDist: new Map(newDist),
-        pathTrace: [...trace],
-        isOriginal: isOrig
-      });
-
-      // 2. Duplicate projectile is spawned ONLY if incoming projectile is original
-      if (isOrig) {
-        activeNodes.push({
-          r, c, dir: blockRot,
-          damageDist: new Map(newDist),
-          pathTrace: [...trace],
-          isOriginal: false // Marked as duplicate -> won't duplicate at future +1 Projectile blocks
+  for (let world of worldBranches) {
+    switch (tile.block) {
+      case 'Turn Left':
+        world.activeNodes.push({
+          r, c, dir: normDir(blockRot - 90),
+          damage: node.damage, pathTrace: trace,
+          isOriginal: isOrig
         });
-      }
-      break;
+        expandedBranches.push(world);
+        break;
 
-    case 'Dual Splitter':
-      // Physical path split: Clones ALL incoming projectiles into both exit directions
-      activeNodes.push({
-        r, c, dir: normDir(blockRot - 90),
-        damageDist: new Map(newDist),
-        pathTrace: [...trace],
-        isOriginal: isOrig
-      });
-      activeNodes.push({
-        r, c, dir: normDir(blockRot + 90),
-        damageDist: new Map(newDist),
-        pathTrace: [...trace],
-        isOriginal: isOrig
-      });
-      break;
+      case 'Turn Right':
+        world.activeNodes.push({
+          r, c, dir: normDir(blockRot + 90),
+          damage: node.damage, pathTrace: trace,
+          isOriginal: isOrig
+        });
+        expandedBranches.push(world);
+        break;
 
-    case '+1 Damage':
-      let addDist = new Map();
-      newDist.forEach((prob, dmg) => addDist.set(dmg + 1, prob));
-      activeNodes.push({
-        r, c, dir: blockRot,
-        damageDist: addDist, pathTrace: trace,
-        isOriginal: isOrig
-      });
-      break;
+      case '+1 Projectile':
+        world.activeNodes.push({
+          r, c, dir: blockRot,
+          damage: node.damage, pathTrace: [...trace],
+          isOriginal: isOrig
+        });
 
-    case '33% x2 Damage':
-      let multDist = new Map();
-      newDist.forEach((prob, dmg) => {
-        let d2 = dmg * 2;
-        multDist.set(d2, (multDist.get(d2) || 0) + prob * 0.33);
-        multDist.set(dmg, (multDist.get(dmg) || 0) + prob * 0.67);
-      });
-      activeNodes.push({
-        r, c, dir: blockRot,
-        damageDist: multDist, pathTrace: trace,
-        isOriginal: isOrig
-      });
-      break;
+        if (isOrig) {
+          world.activeNodes.push({
+            r, c, dir: blockRot,
+            damage: node.damage, pathTrace: [...trace],
+            isOriginal: false // Duplicated projectile
+          });
+        }
+        expandedBranches.push(world);
+        break;
 
-    default:
-      allTraces.push(trace);
-      break;
-  }
-}
+      case 'Dual Splitter':
+        // Clones current projectile into left and right directions
+        world.activeNodes.push({
+          r, c, dir: normDir(blockRot - 90),
+          damage: node.damage, pathTrace: [...trace],
+          isOriginal: isOrig
+        });
+        world.activeNodes.push({
+          r, c, dir: normDir(blockRot + 90),
+          damage: node.damage, pathTrace: [...trace],
+          isOriginal: isOrig
+        });
+        expandedBranches.push(world);
+        break;
 
-function combineEjectedDistributions(ejectedDistributions) {
-  if (ejectedDistributions.length === 0) {
-    return { 0: 1.0 };
-  }
+      case '+1 Damage':
+        world.activeNodes.push({
+          r, c, dir: blockRot,
+          damage: node.damage + 1, pathTrace: trace,
+          isOriginal: isOrig
+        });
+        expandedBranches.push(world);
+        break;
 
-  let currentDist = new Map([[0, 1.0]]);
+      case '33% x2 Damage':
+        // Branches the World state into two outcomes: Hit (33%) vs Miss (67%)
+        let hitWorld = {
+          prob: world.prob * 0.33,
+          activeNodes: [...world.activeNodes.map(n => ({ ...n, pathTrace: [...n.pathTrace] }))],
+          totalEjectedDamage: world.totalEjectedDamage
+        };
+        hitWorld.activeNodes.push({
+          r, c, dir: blockRot,
+          damage: node.damage * 2, pathTrace: trace,
+          isOriginal: isOrig
+        });
 
-  for (const projDist of ejectedDistributions) {
-    const nextDist = new Map();
+        let missWorld = {
+          prob: world.prob * 0.67,
+          activeNodes: [...world.activeNodes.map(n => ({ ...n, pathTrace: [...n.pathTrace] }))],
+          totalEjectedDamage: world.totalEjectedDamage
+        };
+        missWorld.activeNodes.push({
+          r, c, dir: blockRot,
+          damage: node.damage, pathTrace: trace,
+          isOriginal: isOrig
+        });
 
-    for (const [dmgA, probA] of currentDist.entries()) {
-      for (const [dmgB, probB] of projDist.entries()) {
-        const totalDmg = dmgA + dmgB;
-        const totalProb = probA * probB;
-        const existingProb = nextDist.get(totalDmg) || 0;
-        
-        nextDist.set(totalDmg, existingProb + totalProb);
-      }
+        expandedBranches.push(hitWorld, missWorld);
+        break;
+
+      default:
+        allTraces.push(trace);
+        expandedBranches.push(world);
+        break;
     }
-    currentDist = nextDist;
   }
 
-  const resultObj = {};
-  for (const [dmg, prob] of currentDist.entries()) {
-    resultObj[dmg] = prob;
-  }
-  return resultObj;
+  return expandedBranches;
 }
 
-function aggregateResults(ejectorHits, allTraces) {
-  let totalEjected = ejectorHits.length;
-
-  if (totalEjected === 0) {
+function aggregateResults(completedWorlds, allTraces) {
+  if (completedWorlds.length === 0) {
     return { traces: allTraces, totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
   }
 
-  const ejectedDists = ejectorHits.map(hit => hit.damageDist);
-  const combinedDist = combineEjectedDistributions(ejectedDists);
+  // Aggregate joint world probabilities by total combined damage
+  let combinedDist = {};
+
+  for (let world of completedWorlds) {
+    let dmg = world.totalEjectedDamage;
+    combinedDist[dmg] = (combinedDist[dmg] || 0) + world.prob;
+  }
 
   let ev = 0;
   let min = Infinity;
@@ -236,7 +254,7 @@ function aggregateResults(ejectorHits, allTraces) {
 
   return {
     traces: allTraces,
-    totalEjected,
+    totalEjected: Object.keys(combinedDist).length,
     ev: Number(ev.toFixed(2)),
     min: min === Infinity ? 0 : min,
     max: max === -Infinity ? 0 : max,
