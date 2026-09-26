@@ -9,7 +9,7 @@
 </head>
 <body>
   <header>
-    <h1>MGB Damage Simulator v0.2</h1>
+    <h1>MGB Damage Simulator v0.3</h1>
   </header>
 
   <main class="app-container">
@@ -29,7 +29,7 @@
         <button id="btn-rotate-ccw" class="action-btn" title="Rotate CCW (↺)">
           <img src="Images/Rotate_ccw.jpg" alt="Rotate CCW">
         </button>
-  
+
         <button id="btn-rotate-cw" class="action-btn" title="Rotate CW (↻)">
           <img src="Images/Rotate_cw.jpg" alt="Rotate CW">
         </button>
@@ -38,8 +38,12 @@
           <img src="Images/Delete.jpg" alt="Delete">
         </button>
         
+        <button id="btn-clear-path" class="action-btn" title="Clear Non-Directional Blocks">
+          <img src="Images/Clear.jpg" alt="Clear Path Blocks">
+        </button>
+
         <button id="btn-clear" class="action-btn" title="Clear Entire Grid">
-          <img src="Images/Clear.jpg" alt="Clear">
+          <img src="Images/Clear.jpg" alt="Clear All" style="filter: hue-rotate(140deg);">
         </button>
       </div>
     </section>
@@ -48,8 +52,27 @@
     <section class="results-panel">
       <div class="calc-header">
         <h3>Damage Analysis</h3>
-        <button id="btn-calc" class="primary">Calculate Damage</button>
+        <div class="calc-actions">
+          <button id="btn-share" class="secondary" title="Copy shareable build link to clipboard">Share</button>
+          <button id="btn-calc" class="primary">Calculate Damage</button>
+        </div>
       </div>
+
+      <!-- TRIALS CONFIGURATION -->
+      <div class="trials-config">
+        <div class="trials-label-row">
+          <label for="trials-input">Simulations:</label>
+          <input type="number" id="trials-input" min="1000" max="5000000" step="1000" value="1000000">
+        </div>
+        <input type="range" id="trials-slider" min="1000" max="5000000" step="1000" value="1000000">
+      </div>
+
+      <!-- PROGRESS BAR -->
+      <div class="progress-wrapper" id="progress-wrapper">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="progress-text" id="progress-text"></div>
+
       <div class="kpi-cards">
         <div class="card"><span>Average DPS: </span><strong id="kpi-ev">0 </strong></div>
         <div class="card"><span>Min/Max: </span><strong id="kpi-range">0 / 0 </strong></div>
@@ -59,6 +82,8 @@
       </div>
     </section>
   </main>
+
+  <div id="toast" class="toast">Link copied to clipboard!</div>
 
   <script src="engine.js"></script>
   <script src="app.js"></script>
