@@ -1,6 +1,5 @@
-// --- TRAVERSAL & PROBABILITY ENGINE ---
+// --- OPTIMIZED MONTE CARLO TRAVERSAL ENGINE ---
 
-// Direction Vectors: 0: North, 90: East, 180: South, 270: West
 const DIR_VECTORS = {
   0:   { dr: -1, dc: 0 },  // North (Up)
   90:  { dr: 0,  dc: 1 },  // East (Right)
@@ -8,12 +7,17 @@ const DIR_VECTORS = {
   270: { dr: 0,  dc: -1 }  // West (Left)
 };
 
+
+
 function normDir(dir) {
   return (dir % 360 + 360) % 360;
 }
 
-function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1) {
-  // Find emitter location
+/**
+ * LIGHTWEIGHT SINGLE-PASS TRACE FOR UI PREVIEW
+ * Used exclusively for canvas trajectory overlays and auto-rotation.
+ */
+function tracePathOnly(shipGrid, gridSize) {
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
@@ -24,240 +28,413 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1) {
     }
   }
 
-  if (!emitter) return { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
+  if (!emitter) return { traces: [] };
 
-  // A "World State" tracks a joint probability outcome across all branched paths.
-  let worldStates = [{
-    prob: 1.0,
-    activeNodes: [{
-      r: emitter.r,
-      c: emitter.c,
-      dir: emitter.dir,
-      damage: baseDamage,
-      pathTrace: [{ r: emitter.r, c: emitter.c }],
-      isOriginal: true
-    }],
-    totalEjectedDamage: 0
+  const activeNodes = [{
+    r: emitter.r,
+    c: emitter.c,
+    dir: emitter.dir,
+    damage: 1,
+    pathTrace: [{ r: emitter.r, c: emitter.c }],
+    isOriginal: true
   }];
 
-  let completedWorlds = [];
-  let allTraces = [];
+  let traces = [];
   let steps = 0;
-  const maxSteps = 2000;
+  let queue = activeNodes;
 
-  while (worldStates.length > 0 && steps < maxSteps) {
+  while (queue.length > 0 && steps < 1000) {
     steps++;
-    let nextWorldStates = [];
+    let nextQueue = [];
 
-    for (let world of worldStates) {
-      if (world.activeNodes.length === 0) {
-        completedWorlds.push(world);
+    for (let node of queue) {
+      const vec = DIR_VECTORS[node.dir];
+      let nextR = node.r + vec.dr;
+      let nextC = node.c + vec.dc;
+
+      if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
+        traces.push(node.pathTrace);
         continue;
       }
 
-      // Process all current active nodes in this world state concurrently
-      let currentNodes = world.activeNodes;
-      let newWorldBranches = [{ prob: world.prob, activeNodes: [], totalEjectedDamage: world.totalEjectedDamage }];
+      const targetTile = shipGrid[nextR][nextC];
+      let newTrace = [...node.pathTrace, { r: nextR, c: nextC }];
 
-      for (let node of currentNodes) {
-        const vec = DIR_VECTORS[node.dir];
-        let nextR = node.r + vec.dr;
-        let nextC = node.c + vec.dc;
+      if (targetTile.type === 'WALL' || targetTile.type === 'EJECTOR') {
+        traces.push(newTrace);
+        continue;
+      }
 
-        // Out of bounds -> stop trace
-        if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
-          allTraces.push(node.pathTrace);
-          continue;
-        }
-
-        const targetTile = shipGrid[nextR][nextC];
-        let newTrace = [...node.pathTrace, { r: nextR, c: nextC }];
-
-        // Hit Wall -> stop trace
-        if (targetTile.type === 'WALL') {
-          allTraces.push(newTrace);
-          continue;
-        }
-
-        // Hit Ejector -> Register damage output & stop trace
-        if (targetTile.type === 'EJECTOR') {
-          for (let w of newWorldBranches) {
-            w.totalEjectedDamage += node.damage;
-          }
-          allTraces.push(newTrace);
-          continue;
-        }
-
-        if (targetTile.type === 'SPACE') {
-          if (!targetTile.block) {
-            // Rule 0: Move straight through empty tile
-            for (let w of newWorldBranches) {
-              w.activeNodes.push({
-                r: nextR, c: nextC, dir: node.dir,
-                damage: node.damage, pathTrace: newTrace,
-                isOriginal: node.isOriginal ?? true
-              });
-            }
+      if (targetTile.type === 'SPACE') {
+        if (!targetTile.block) {
+          nextQueue.push({ ...node, r: nextR, c: nextC, pathTrace: newTrace });
+        } else {
+          const requiredDir = normDir(targetTile.rotation);
+          if (node.dir === requiredDir) {
+            let processed = processModifierForTrace(targetTile, node, nextR, nextC, newTrace, traces);
+            nextQueue.push(...processed);
           } else {
-            // Rule 1: Validate entry direction
-            const requiredTravelDir = normDir(targetTile.rotation);
-            if (node.dir === requiredTravelDir) {
-              newWorldBranches = processModifierBlockWorld(
-                targetTile, node, nextR, nextC, newTrace, newWorldBranches, allTraces
-              );
-            } else {
-              // Direction mismatch -> stop trace
-              allTraces.push(newTrace);
-            }
+            traces.push(newTrace);
           }
         }
       }
-
-      nextWorldStates.push(...newWorldBranches);
     }
-
-    worldStates = nextWorldStates;
+    queue = nextQueue;
   }
 
-  // Include any remaining un-completed worlds
-  completedWorlds.push(...worldStates);
-
-  return aggregateResults(completedWorlds, allTraces);
+  return { traces };
 }
 
-function processModifierBlockWorld(tile, node, r, c, trace, worldBranches, allTraces) {
-  const blockRot = normDir(tile.rotation);
+function processModifierForTrace(tile, node, r, c, trace, traces) {
+  const rot = normDir(tile.rotation);
   const isOrig = node.isOriginal ?? true;
-  let expandedBranches = [];
 
-  for (let world of worldBranches) {
-    switch (tile.block) {
-      case 'Turn Left':
-        world.activeNodes.push({
-          r, c, dir: normDir(blockRot - 90),
-          damage: node.damage, pathTrace: trace,
-          isOriginal: isOrig
-        });
-        expandedBranches.push(world);
+  switch (tile.block) {
+    case 'Turn Left':
+      return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];
+    case 'Turn Right':
+      return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];
+    case '+1 Damage':
+      return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];
+    case '+1 Projectile':
+      let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
+      if (isOrig) projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
+      return projList;
+    case 'Dual Splitter':
+      return [
+        { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
+      ];
+    case '33% x2 Damage':
+      return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+    default:
+      traces.push(trace);
+      return [];
+  }
+}
+
+// ============================================================================
+// LEVEL 2: PRE-COMPILED EXECUTION GRAPH ENGINE
+// ============================================================================
+
+/**
+ * Compiles grid structure into an optimized graph representation.
+ * Deterministic steps (turns, straight travel, splitters, +1 damage) are compiled
+ * into graph nodes, isolating probabilistic nodes (33% x2 Damage) for fast evaluation.
+ */
+function compileShipGraph(shipGrid, gridSize) {
+  let emitter = null;
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
+      if (shipGrid[r][c].type === 'EMITTER') {
+        emitter = { r, c, dir: normDir(shipGrid[r][c].rotation) };
         break;
-
-      case 'Turn Right':
-        world.activeNodes.push({
-          r, c, dir: normDir(blockRot + 90),
-          damage: node.damage, pathTrace: trace,
-          isOriginal: isOrig
-        });
-        expandedBranches.push(world);
-        break;
-
-      case '+1 Projectile':
-        world.activeNodes.push({
-          r, c, dir: blockRot,
-          damage: node.damage, pathTrace: [...trace],
-          isOriginal: isOrig
-        });
-
-        if (isOrig) {
-          world.activeNodes.push({
-            r, c, dir: blockRot,
-            damage: node.damage, pathTrace: [...trace],
-            isOriginal: false // Duplicated projectile
-          });
-        }
-        expandedBranches.push(world);
-        break;
-
-      case 'Dual Splitter':
-        // Clones current projectile into left and right directions
-        world.activeNodes.push({
-          r, c, dir: normDir(blockRot - 90),
-          damage: node.damage, pathTrace: [...trace],
-          isOriginal: isOrig
-        });
-        world.activeNodes.push({
-          r, c, dir: normDir(blockRot + 90),
-          damage: node.damage, pathTrace: [...trace],
-          isOriginal: isOrig
-        });
-        expandedBranches.push(world);
-        break;
-
-      case '+1 Damage':
-        world.activeNodes.push({
-          r, c, dir: blockRot,
-          damage: node.damage + 1, pathTrace: trace,
-          isOriginal: isOrig
-        });
-        expandedBranches.push(world);
-        break;
-
-      case '33% x2 Damage':
-        // Branches the World state into two outcomes: Hit (33%) vs Miss (67%)
-        let hitWorld = {
-          prob: world.prob * 0.33,
-          activeNodes: [...world.activeNodes.map(n => ({ ...n, pathTrace: [...n.pathTrace] }))],
-          totalEjectedDamage: world.totalEjectedDamage
-        };
-        hitWorld.activeNodes.push({
-          r, c, dir: blockRot,
-          damage: node.damage * 2, pathTrace: trace,
-          isOriginal: isOrig
-        });
-
-        let missWorld = {
-          prob: world.prob * 0.67,
-          activeNodes: [...world.activeNodes.map(n => ({ ...n, pathTrace: [...n.pathTrace] }))],
-          totalEjectedDamage: world.totalEjectedDamage
-        };
-        missWorld.activeNodes.push({
-          r, c, dir: blockRot,
-          damage: node.damage, pathTrace: trace,
-          isOriginal: isOrig
-        });
-
-        expandedBranches.push(hitWorld, missWorld);
-        break;
-
-      default:
-        allTraces.push(trace);
-        expandedBranches.push(world);
-        break;
+      }
     }
   }
 
-  return expandedBranches;
+  if (!emitter) return null;
+
+  let nodes = [];
+  let visitedKeyToId = new Map();
+
+  function getKey(r, c, dir, isOriginal) {
+    return `${r},${c},${dir},${isOriginal ? 1 : 0}`;
+  }
+
+  function resolvePath(startR, startC, startDir, startIsOrig) {
+    const key = getKey(startR, startC, startDir, startIsOrig);
+    if (visitedKeyToId.has(key)) {
+      return visitedKeyToId.get(key);
+    }
+
+    let nodeId = nodes.length;
+    visitedKeyToId.set(key, nodeId);
+
+    // Placeholder node
+    let node = {
+      id: nodeId,
+      flatAdd: 0,
+      probMultiplier: 1, // 1 = deterministic, 2 = 33% chance x2
+      nextNodes: [],
+      isEjector: false
+    };
+    nodes.push(node);
+
+    let currR = startR;
+    let currC = startC;
+    let currDir = startDir;
+    let isOrig = startIsOrig;
+    let accumulatedAdd = 0;
+    let steps = 0;
+
+    while (steps < 1000) {
+      steps++;
+      const vec = DIR_VECTORS[currDir];
+      let nextR = currR + vec.dr;
+      let nextC = currC + vec.dc;
+
+      // Off-grid or hit outer wall -> Termination
+      if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
+        node.flatAdd = accumulatedAdd;
+        return nodeId;
+      }
+
+      const targetTile = shipGrid[nextR][nextC];
+
+      if (targetTile.type === 'WALL') {
+        node.flatAdd = accumulatedAdd;
+        return nodeId;
+      }
+
+      if (targetTile.type === 'EJECTOR') {
+        node.flatAdd = accumulatedAdd;
+        node.isEjector = true;
+        return nodeId;
+      }
+
+      if (targetTile.type === 'SPACE') {
+        if (!targetTile.block) {
+          currR = nextR;
+          currC = nextC;
+          continue;
+        }
+
+        const requiredDir = normDir(targetTile.rotation);
+        if (currDir !== requiredDir) {
+          // Blocked by wrong-facing modifier entry
+          node.flatAdd = accumulatedAdd;
+          return nodeId;
+        }
+
+        const block = targetTile.block;
+        currR = nextR;
+        currC = nextC;
+
+        if (block === 'Turn Left') {
+          currDir = normDir(requiredDir - 90);
+        } else if (block === 'Turn Right') {
+          currDir = normDir(requiredDir + 90);
+        } else if (block === '+1 Damage') {
+          accumulatedAdd += 1;
+        } else if (block === '+1 Projectile') {
+          node.flatAdd = accumulatedAdd;
+          let next1 = resolvePath(currR, currC, currDir, isOrig);
+          node.nextNodes.push(next1);
+          if (isOrig) {
+            let next2 = resolvePath(currR, currC, currDir, false);
+            node.nextNodes.push(next2);
+          }
+          return nodeId;
+        } else if (block === 'Dual Splitter') {
+          node.flatAdd = accumulatedAdd;
+          let leftDir = normDir(requiredDir - 90);
+          let rightDir = normDir(requiredDir + 90);
+          node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));
+          node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig));
+          return nodeId;
+        } else if (block === '33% x2 Damage') {
+          node.flatAdd = accumulatedAdd;
+          node.probMultiplier = 2; // Flag as 33% x2 chance
+          node.nextNodes.push(resolvePath(currR, currC, currDir, isOrig));
+          return nodeId;
+        }
+      }
+    }
+
+    node.flatAdd = accumulatedAdd;
+    return nodeId;
+  }
+
+  let rootId = resolvePath(emitter.r, emitter.c, emitter.dir, true);
+  return { rootId, nodes };
 }
 
-function aggregateResults(completedWorlds, allTraces) {
-  if (completedWorlds.length === 0) {
-    return { traces: allTraces, totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
+/**
+ * HIGH-SPEED MONTE CARLO SIMULATION
+ * Uses flat pre-allocated arrays, compiled graph traversal, and time-sliced
+ * frame execution for smooth progress reporting without blocking the UI.
+ */
+function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, numSimulations = 1000000, onProgress = null) {
+  const compiled = compileShipGraph(shipGrid, gridSize);
+
+  if (!compiled) {
+    const emptyResult = { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
+    if (onProgress) {
+      onProgress(numSimulations, numSimulations);
+      return Promise.resolve(emptyResult);
+    }
+    return emptyResult;
   }
 
-  // Aggregate joint world probabilities by total combined damage
-  let combinedDist = {};
+  const { rootId, nodes } = compiled;
+  const numNodes = nodes.length;
 
-  for (let world of completedWorlds) {
-    let dmg = world.totalEjectedDamage;
-    combinedDist[dmg] = (combinedDist[dmg] || 0) + world.prob;
+  // Flatten graph structures into pre-allocated typed arrays
+  const nodeFlatAdd = new Int32Array(numNodes);
+  const nodeIsEjector = new Uint8Array(numNodes);
+  const nodeProbMult = new Uint8Array(numNodes);
+  const nextNodesOffset = new Int32Array(numNodes);
+  const nextNodesCount = new Int32Array(numNodes);
+
+  // Flatten edges list
+  let totalEdges = 0;
+  for (let i = 0; i < numNodes; i++) {
+    totalEdges += nodes[i].nextNodes.length;
+  }
+  const edgeList = new Int32Array(totalEdges);
+
+  let edgeIdx = 0;
+  for (let i = 0; i < numNodes; i++) {
+    const n = nodes[i];
+    nodeFlatAdd[i] = n.flatAdd;
+    nodeIsEjector[i] = n.isEjector ? 1 : 0;
+    nodeProbMult[i] = n.probMultiplier;
+
+    nextNodesOffset[i] = edgeIdx;
+    nextNodesCount[i] = n.nextNodes.length;
+
+    for (let j = 0; j < n.nextNodes.length; j++) {
+      edgeList[edgeIdx++] = n.nextNodes[j];
+    }
   }
 
-  let ev = 0;
-  let min = Infinity;
-  let max = -Infinity;
+  // Pre-allocated stack buffers for traversal (Zero GC during evaluation)
+  const MAX_STACK = 256;
+  const stackNodeId = new Int32Array(MAX_STACK);
+  const stackDamage = new Float64Array(MAX_STACK);
 
-  Object.entries(combinedDist).forEach(([dmgStr, prob]) => {
-    let dmg = Number(dmgStr);
-    ev += dmg * prob;
-    if (dmg < min) min = dmg;
-    if (dmg > max) max = dmg;
+  // Frequency Map for damage outcomes (sampled up to 50k to eliminate Map lookup bottlenecks)
+  const damageCounts = new Map();
+  const MAX_HISTOGRAM_SAMPLES = 50000;
+  const sampleStride = numSimulations > MAX_HISTOGRAM_SAMPLES
+    ? Math.ceil(numSimulations / MAX_HISTOGRAM_SAMPLES)
+    : 1;
+  let histogramSamples = 0;
+
+  let totalDamageSum = 0;
+  let globalMin = Infinity;
+  let globalMax = -Infinity;
+
+  // 32-bit Xorshift PRNG state & threshold for 33% chance
+  let rngState = (Date.now() & 0xFFFFFFFF) || 123456789;
+  const THRESHOLD_33_PCT = 1417339208; // Math.floor(0.33 * 4294967296)
+
+  // Simulation execution helper for a batch of trials
+  function executeBatch(startSim, count) {
+    const endSim = Math.min(startSim + count, numSimulations);
+
+    for (let sim = startSim; sim < endSim; sim++) {
+      let stackPtr = 0;
+      stackNodeId[0] = rootId;
+      stackDamage[0] = baseDamage;
+      stackPtr = 1;
+
+      let simDamage = 0;
+
+      while (stackPtr > 0) {
+        stackPtr--;
+        let currId = stackNodeId[stackPtr];
+        let currDmg = stackDamage[stackPtr];
+
+        // Linear Path Shortcut: follow single-exit chains without stack push/pop
+        while (true) {
+          currDmg += nodeFlatAdd[currId];
+
+          if (nodeProbMult[currId] === 2) {
+            // Xorshift32 PRNG (32-bit integer arithmetic)
+            rngState ^= rngState << 13;
+            rngState ^= rngState >>> 17;
+            rngState ^= rngState << 5;
+            if ((rngState >>> 0) < THRESHOLD_33_PCT) {
+              currDmg *= 2;
+            }
+          }
+
+          if (nodeIsEjector[currId] === 1) {
+            simDamage += currDmg;
+          }
+
+          const count = nextNodesCount[currId];
+          if (count === 1) {
+            currId = edgeList[nextNodesOffset[currId]];
+            continue;
+          }
+
+          if (count > 1) {
+            const offset = nextNodesOffset[currId];
+            for (let k = 0; k < count; k++) {
+              stackNodeId[stackPtr] = edgeList[offset + k];
+              stackDamage[stackPtr] = currDmg;
+              stackPtr++;
+            }
+          }
+          break;
+        }
+      }
+
+      if (sim % sampleStride === 0) {
+        damageCounts.set(simDamage, (damageCounts.get(simDamage) || 0) + 1);
+        histogramSamples++;
+      }
+      totalDamageSum += simDamage;
+
+      if (simDamage < globalMin) globalMin = simDamage;
+      if (simDamage > globalMax) globalMax = simDamage;
+    }
+
+    return endSim;
+  }
+
+  function finalize() {
+    let dist = {};
+    const sampleBase = histogramSamples || 1;
+    damageCounts.forEach((count, dmg) => {
+      dist[dmg] = Number((count / sampleBase).toFixed(4));
+    });
+
+    return {
+      traces: [],
+      totalEjected: numSimulations,
+      ev: Number((totalDamageSum / numSimulations).toFixed(2)),
+      min: globalMin === Infinity ? 0 : globalMin,
+      max: globalMax === -Infinity ? 0 : globalMax,
+      dist: dist
+    };
+  }
+
+  // If no onProgress callback, run synchronously
+  if (!onProgress) {
+    executeBatch(0, numSimulations);
+    return finalize();
+  }
+
+  // Time-sliced asynchronous run with resolution of 10,000 trials
+  return new Promise((resolve) => {
+    let currentSim = 0;
+    const RESOLUTION = 10000;
+
+    function processFrame() {
+      const frameStart = performance.now();
+
+      while (currentSim < numSimulations) {
+        currentSim = executeBatch(currentSim, RESOLUTION);
+
+        // Yield if more than 12ms elapsed in this frame to maintain 60 FPS
+        if (performance.now() - frameStart >= 12) {
+          break;
+        }
+      }
+
+      onProgress(currentSim, numSimulations);
+
+      if (currentSim < numSimulations) {
+        requestAnimationFrame(processFrame);
+      } else {
+        resolve(finalize());
+      }
+    }
+
+    requestAnimationFrame(processFrame);
   });
-
-  return {
-    traces: allTraces,
-    totalEjected: Object.keys(combinedDist).length,
-    ev: Number(ev.toFixed(2)),
-    min: min === Infinity ? 0 : min,
-    max: max === -Infinity ? 0 : max,
-    dist: combinedDist
-  };
 }
