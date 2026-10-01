@@ -7,6 +7,18 @@ const DIR_VECTORS = {
   270: { dr: 0,  dc: -1 }  // West (Left)
 };
 
+// Blocks that pass projectiles straight through without altering direction or damage
+const PASSTHROUGH_BLOCKS = new Set([
+  'More Speed', 'Less Speed', 'Eject Left', 'Eject Right', 'Eject Randomly',
+  'Eject Narrow', 'Curve Left', 'Curve Right', 'Curve Random', 'Bounce back',
+  'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage',
+  'Pierce', 'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align',
+  'Line Magnet', 'Forward Magnet', 'Sideways', 'Money Cross', 'Endlife Damage',
+  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile', 'Tenfold Damage',
+  'Gamble damage', 'Charger', 'Damage Cross', 'Max Tier Damage', '4x Damage',
+  'Unused Damage', 'Accumulator', 'Turn Damage', '+100 Damage',
+  'Ejector Damage', 'DoDuplicate Projectile'
+]);
 
 
 function normDir(dir) {
@@ -124,9 +136,15 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
         { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
       ];}
-    default:
+    default: {
+      // If block is in PASSTHROUGH_BLOCKS, continue path straight through
+      if (PASSTHROUGH_BLOCKS.has(tile.block)) {
+        return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+      }
+      // Unrecognized block -> stop trace
       traces.push(trace);
       return [];
+    }
   }
 }
 
