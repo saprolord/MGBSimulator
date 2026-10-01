@@ -90,23 +90,40 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
   const isOrig = node.isOriginal ?? true;
 
   switch (tile.block) {
-    case 'Turn Left':
-      return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];
-    case 'Turn Right':
-      return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];
-    case '+1 Damage':
-      return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];
-    case '+1 Projectile':
+    case 'Turn Left': {
+      return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];}
+    case 'Turn Right':{
+      return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];}
+    case '+1 Damage':{
+      return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];}
+    case '+1 Projectile':{
       let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
       if (isOrig) projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
-      return projList;
-    case 'Dual Splitter':
+      return projList;   }
+    case 'Dual Splitter':{
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
-      ];
-    case '33% x2 Damage':
-      return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+      ];}
+    case '33% x2 Damage':{
+      return [{ ...node, r, c, dir: rot, pathTrace: trace }];}
+      case 'Triple Splitter':{
+      return [
+        { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
+      ];}
+    case 'Random Double':{
+      return [
+        { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
+      ];}
+    case 'Random Triple':{
+      return [
+        { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
+        { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
+      ];}
     default:
       traces.push(trace);
       return [];
@@ -239,6 +256,35 @@ function compileShipGraph(shipGrid, gridSize) {
           node.nextNodes.push(resolvePath(currR, currC, currDir, isOrig));
           return nodeId;
         }
+         else if (block === 'Triple Splitter') {
+          node.flatAdd = accumulatedAdd;
+          let leftDir = normDir(requiredDir - 90);
+          let rightDir = normDir(requiredDir + 90);
+          let next1 = resolvePath(currR, currC, currDir, isOrig);
+          node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));
+          node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig));
+          node.nextNodes.push(next1);
+          return nodeId;
+        } 
+          else if (block === 'Random Double') {
+            node.flatAdd = accumulatedAdd;
+            node.probMultiplier = 3; // Tag: Random 50/50 path branch + x2 Damage
+            let leftDir = normDir(requiredDir - 90);
+            let rightDir = normDir(requiredDir + 90);
+            node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));  // index 0: Left
+            node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig)); // index 1: Right
+            return nodeId;
+        } 
+          else if (block === 'Random Triple') {
+            node.flatAdd = accumulatedAdd;
+            node.probMultiplier = 4; // Tag: Random 33/33/33 path branch + x3 Damage
+            let leftDir = normDir(requiredDir - 90);
+            let rightDir = normDir(requiredDir + 90);
+            node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));  // index 0: Left
+            node.nextNodes.push(resolvePath(currR, currC, currDir, isOrig));  // index 1: Straight
+            node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig)); // index 2: Right
+            return nodeId;
+        }
       }
     }
 
@@ -300,7 +346,7 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, num
   }
 
   // Pre-allocated stack buffers for traversal (Zero GC during evaluation)
-  const MAX_STACK = 256;
+  const MAX_STACK = 4096; // 4k stack depth should be sufficient for any reasonable ship layout
   const stackNodeId = new Int32Array(MAX_STACK);
   const stackDamage = new Float64Array(MAX_STACK);
 
@@ -315,10 +361,6 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, num
   let totalDamageSum = 0;
   let globalMin = Infinity;
   let globalMax = -Infinity;
-
-  // 32-bit Xorshift PRNG state & threshold for 33% chance
-  let rngState = (Date.now() & 0xFFFFFFFF) || 123456789;
-  const THRESHOLD_33_PCT = 1417339208; // Math.floor(0.33 * 4294967296)
 
   // Simulation execution helper for a batch of trials
   function executeBatch(startSim, count) {
@@ -341,14 +383,28 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, num
         while (true) {
           currDmg += nodeFlatAdd[currId];
 
-          if (nodeProbMult[currId] === 2) {
-            // Xorshift32 PRNG (32-bit integer arithmetic)
-            rngState ^= rngState << 13;
-            rngState ^= rngState >>> 17;
-            rngState ^= rngState << 5;
-            if ((rngState >>> 0) < THRESHOLD_33_PCT) {
+          const probType = nodeProbMult[currId];
+
+          if (probType === 2) {
+            // 33% x2 Damage
+            if (Math.random() < 0.33) {
               currDmg *= 2;
             }
+          } else if (probType === 3) {
+            // Random Double Damage: 50% Right, 50% Left + 2x Damage
+            currDmg *= 2;
+            const offset = nextNodesOffset[currId];
+            const pick = Math.random() < 0.5 ? 1 : 0; // 50% Right (index 1), 50% Left (index 0)
+            currId = edgeList[offset + pick];
+            continue;
+          } else if (probType === 4) {
+            // Random Triple Damage: ~33.33% Left, ~33.33% Straight, ~33.33% Right + 3x Damage
+            currDmg *= 3;
+            const offset = nextNodesOffset[currId];
+            const rand = Math.random();
+            const pick = rand < 0.3333333333333333 ? 0 : (rand < 0.6666666666666666 ? 1 : 2);
+            currId = edgeList[offset + pick];
+            continue;
           }
 
           if (nodeIsEjector[currId] === 1) {
@@ -362,11 +418,14 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, num
           }
 
           if (count > 1) {
+            // Standard splitters (Dual, Triple, +1 Projectile) that clone bullets
             const offset = nextNodesOffset[currId];
             for (let k = 0; k < count; k++) {
-              stackNodeId[stackPtr] = edgeList[offset + k];
-              stackDamage[stackPtr] = currDmg;
-              stackPtr++;
+              if (stackPtr < MAX_STACK) {
+                stackNodeId[stackPtr] = edgeList[offset + k];
+                stackDamage[stackPtr] = currDmg;
+                stackPtr++;
+              }
             }
           }
           break;

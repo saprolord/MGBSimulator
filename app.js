@@ -16,12 +16,13 @@ let baseDamage = 1;
 let baseFireRate = 1;
 
 // Directional blocks that should NOT be cleared by "Clear Path"
-const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter']);
+const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter','Triple Splitter','Random Double','Random Triple']);
 
 // Available Items
 const ITEM_PALETTE = [
   'Turn Right', 'Turn Left', 'Dual Splitter',
-  '+1 Damage', '+1 Projectile', '33% x2 Damage'
+  '+1 Damage', '+1 Projectile', '33% x2 Damage', 'Triple Splitter',
+  'Random Double', 'Random Triple'
 ];
 
 // Layout Setup
@@ -59,7 +60,10 @@ const BLOCK_IMAGES = {
   'Dual Splitter':  'Images/Split_sides.webp',
   '+1 Damage':      'Images/More_damage.webp',
   '+1 Projectile':  'Images/Clone_bullet.webp',
-  '33% x2 Damage':  'Images/Double_damage.webp'
+  '33% x2 Damage':  'Images/Double_damage.webp',
+  'Triple Splitter': 'Images/Split_all.webp',
+  'Random Double':    'Images/Random_double.webp',
+  'Random Triple':    'Images/Random_triple.webp'
 };
 
 // Preload Images
@@ -531,19 +535,12 @@ const BLOCK_CATALOG = [
   'Dual Splitter',  // 02
   '+1 Damage',      // 03
   '+1 Projectile',  // 04
-  '33% x2 Damage'   // 05
+  '33% x2 Damage',   // 05
+  'Triple Splitter', // 06
+  'Random Double',   // 07
+  'Random Triple'    // 08
   // Additional blocks (up to 62+) can be appended here
 ];
-
-// Fallback map for any legacy dot-dash links
-const LEGACY_BLOCK_MAP = {
-  'TR': 'Turn Right',
-  'TL': 'Turn Left',
-  'DS': 'Dual Splitter',
-  'D1': '+1 Damage',
-  'P1': '+1 Projectile',
-  'X2': '33% x2 Damage'
-};
 
 function showToast(message) {
   if (!toast) return;
@@ -580,7 +577,9 @@ function serializeLayout() {
 }
 
 function deserializeLayout(encodedStr) {
-  if (!encodedStr) return false;
+  if (!encodedStr || encodedStr.length % 5 !== 0 || !/^[0-9a-fA-F]+$/.test(encodedStr)) {
+    return false;
+  }
 
   // Clear existing placed blocks
   for (let r = 0; r < GRID_SIZE; r++) {
@@ -592,53 +591,26 @@ function deserializeLayout(encodedStr) {
     }
   }
 
-  // 1. Primary format: 5-digit hex chunks (TT-BB-R)
-  if (encodedStr.length % 5 === 0 && /^[0-9a-fA-F]+$/.test(encodedStr)) {
-    let count = 0;
-    for (let i = 0; i < encodedStr.length; i += 5) {
-      const chunk = encodedStr.substring(i, i + 5);
-      const tileIdx = parseInt(chunk.substring(0, 2), 16);
-      const blockIdx = parseInt(chunk.substring(2, 4), 16);
-      const rot = (parseInt(chunk.substring(4, 5), 16) || 0) * 90;
+  let count = 0;
+  for (let i = 0; i < encodedStr.length; i += 5) {
+    const chunk = encodedStr.substring(i, i + 5);
+    const tileIdx = parseInt(chunk.substring(0, 2), 16);
+    const blockIdx = parseInt(chunk.substring(2, 4), 16);
+    const rot = (parseInt(chunk.substring(4, 5), 16) || 0) * 90;
 
-      const blockName = BLOCK_CATALOG[blockIdx];
-      if (blockName && !isNaN(tileIdx)) {
-        const r = Math.floor(tileIdx / GRID_SIZE);
-        const c = tileIdx % GRID_SIZE;
-        if (shipGrid[r] && shipGrid[r][c] && shipGrid[r][c].type === 'SPACE') {
-          shipGrid[r][c].block = blockName;
-          shipGrid[r][c].rotation = normDir(rot);
-          count++;
-        }
+    const blockName = BLOCK_CATALOG[blockIdx];
+    if (blockName && !isNaN(tileIdx)) {
+      const r = Math.floor(tileIdx / GRID_SIZE);
+      const c = tileIdx % GRID_SIZE;
+      if (shipGrid[r] && shipGrid[r][c] && shipGrid[r][c].type === 'SPACE') {
+        shipGrid[r][c].block = blockName;
+        shipGrid[r][c].rotation = normDir(rot);
+        count++;
       }
     }
-    return count > 0;
   }
 
-  // 2. Legacy fallback parser (for dot-dash format if encountered)
-  if (encodedStr.includes('.')) {
-    let count = 0;
-    const items = encodedStr.split('-');
-    items.forEach(item => {
-      const [idxStr, id, rotStr] = item.split('.');
-      const idx = parseInt(idxStr, 10);
-      const rot = (parseInt(rotStr, 10) || 0) * 90;
-      const blockName = LEGACY_BLOCK_MAP[id];
-
-      if (!isNaN(idx) && blockName) {
-        const r = Math.floor(idx / GRID_SIZE);
-        const c = idx % GRID_SIZE;
-        if (shipGrid[r] && shipGrid[r][c] && shipGrid[r][c].type === 'SPACE') {
-          shipGrid[r][c].block = blockName;
-          shipGrid[r][c].rotation = normDir(rot);
-          count++;
-        }
-      }
-    });
-    return count > 0;
-  }
-
-  return false;
+  return count > 0;
 }
 
 function loadFromUrlHash() {
