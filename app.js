@@ -22,12 +22,26 @@ const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter','
 const ITEM_PALETTE = [
   'Turn Right', 'Turn Left', 'Dual Splitter',
   '+1 Damage', '+1 Projectile', '33% x2 Damage', 'Triple Splitter',
-  'Random Double', 'Random Triple'
+  'Random Double', 'Random Triple', 'Tenfold Damage', 'Gamble damage', 'Charger', 'Damage Cross', 'Max Tier Damage',
+  '4x Damage', 'Unused Damage', 'Accumulator', 'Turn Damage', '+100 Damage', 'Ejector Damage', 'Duplicate Projectile',
+  'More Speed', 'Less Speed', 'Eject Left', 'Eject Right', 'Eject Randomly', 'Eject Narrow', 'Curve Left', 'Curve Right',
+  'Curve Random', 'Bounce back', 'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage', 'Pierce', 
+  'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align', 'Line Magnet', 'Forward Magnet', 'Sideways',
+  'Money Cross', 'Endlife Damage', 'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile'
 ];
 
 // Layout Setup
 shipGrid[10][5] = { type: 'EMITTER', block: null, rotation: 0 }; 
 shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 };
+for (let r = 0; r < GRID_SIZE; r++) {
+  shipGrid[r][0] = { type: 'WALL', block: null, rotation: 0 };
+  shipGrid[r][GRID_SIZE - 1] = { type: 'WALL', block: null, rotation: 0 };
+  shipGrid[r][GRID_SIZE - 2] = { type: 'WALL', block: null, rotation: 0 };
+}
+for (let c = 0; c < GRID_SIZE; c++) {
+  shipGrid[0][c] = { type: 'WALL', block: null, rotation: 0 };
+  shipGrid[GRID_SIZE - 1][c] = { type: 'WALL', block: null, rotation: 0 };
+}
 
 // DOM Elements
 const canvas = document.getElementById('ship-canvas');
@@ -51,20 +65,65 @@ const progressText = document.getElementById('progress-text');
 
 // --- IMAGE ASSET CONFIGURATION ---
 const BLOCK_IMAGES = {
+  //Core blocks
   'EMITTER':        'Images/Projectile_generator.webp',
   'EJECTOR':        'Images/Ejection_block.webp',
   'WALL':           'Images/Solid_block.webp',
   'SPACE':          'Images/Empty_slot.webp',
+  //Directional blocks
   'Turn Right':     'Images/Right_turn.webp',
   'Turn Left':      'Images/Left_turn.webp',
   'Dual Splitter':  'Images/Split_sides.webp',
+  'Triple Splitter': 'Images/Split_all.webp',
+  // Damage/projectile modifiers
   '+1 Damage':      'Images/More_damage.webp',
   '+1 Projectile':  'Images/Clone_bullet.webp',
   '33% x2 Damage':  'Images/Double_damage.webp',
-  'Triple Splitter': 'Images/Split_all.webp',
-  'Random Double':    'Images/Random_double.webp',
-  'Random Triple':    'Images/Random_triple.webp'
-};
+  'Random Double':   'Images/Random_double.webp',
+  'Random Triple':   'Images/Random_triple.webp',
+  'Tenfold Damage':  'Images/Tenfold_damage.webp',
+  'Gamble damage':  'Images/Gamble_damage.webp',
+  'Charger':          'Images/Damage_regulator.webp',
+  'Damage Cross':      'Images/Damage_loop.webp',
+  'Max Tier Damage':      'Images/Max_tier_damage.webp',
+  '4x Damage':      'Images/Double_size_and_damage.webp',
+  'Unused Damage':      'Images/Empty_tile_damage_boost.webp',
+  'Accumulator':      'Images/Accumulator.webp',
+  'Turn Damage':      'Images/Turn_damage.webp',
+  '+100 Damage':      'Images/Add_100_damage.webp',
+  'Ejector Damage':      'Images/10_damage_unused_ejector.webp',
+  'Duplicate Projectile':      'Images/Duplicate_bullet.webp',
+
+  // Unconsequntial modifiers for completness and ship copy/paste functionality
+  'More Speed':      'Images/More_speed.webp',
+  'Less Speed':      'Images/Less_speed.webp',
+  'Eject Left':      'Images/Eject_to_the_left.webp',
+  'Eject Right':     'Images/Eject_to_the_right.webp',
+  'Eject Randomly':  'Images/Eject_randomly.webp',
+  'Eject Narrow':    'Images/Eject_narrow.webp',
+  'Curve Left':       'Images/Curve_left.webp',
+  'Curve Right':      'Images/Curve_right.webp',
+  'Curve Random':     'Images/Curve_randomly.webp',
+  'Bounce back':      'Images/Bounce_back.webp',
+  'Bounce randomly':   'Images/Bounce_randomly.webp',
+  'Ricochet':          'Images/Realistic_bounce.webp',
+  'Double Lifetime':   'Images/More_projectile_lifetime.webp',
+  'Persistent Damage': 'Images/Persistent_damage.webp',
+  'Pierce':            'Images/Pierce.webp',
+  'AOE Radius':        'Images/AOE.webp',
+  'AOE Square':        'Images/Square_aoe.webp',
+  'Projectile Magnet': 'Images/bullet_magnet.webp',
+  'Projectile Align':  'Images/bullet_align.webp',
+  'Line Magnet':       'Images/Ship_line_bullet_magnet.webp',
+  'Forward Magnet':    'Images/Forward.webp',
+  'Sideways':        'Images/Sideways.webp',
+  'Money Cross':        'Images/Money_loop.webp',
+  'Endlife Damage':        'Images/More_damage_at_end_of_lifetime.webp',
+  'Slow Damage':        'Images/Speed_damage_boost.webp',
+  'Zigzag Projectile':        'Images/Zigzag_bullet.webp',
+  'Double Less Projectile':      'Images/Double_damage_10_bullet_screen.webp'
+
+}
 
 // Preload Images
 const loadedImages = {};
@@ -364,25 +423,29 @@ btnDelete.addEventListener('click', deleteSelectedTile);
 
 // Clear Path Only: Retains Turns & Splitters
 btnClearPath.addEventListener('click', () => {
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      const tile = shipGrid[r][c];
-      if (tile.type === 'SPACE' && tile.block && !DIRECTIONAL_BLOCKS.has(tile.block)) {
-        tile.block = null;
-        tile.rotation = 0;
+  if (confirm('Are you sure you want to clear all non-directional blocks?')) {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const tile = shipGrid[r][c];
+        if (tile.type === 'SPACE' && tile.block && !DIRECTIONAL_BLOCKS.has(tile.block)) {
+          tile.block = null;
+          tile.rotation = 0;
+        }
       }
     }
+    updatePathAndGrid();
   }
-  updatePathAndGrid();
 });
 
 // Clear All Blocks
 btnClear.addEventListener('click', () => {
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (shipGrid[r][c].type === 'SPACE') {
-        shipGrid[r][c].block = null;
-        shipGrid[r][c].rotation = 0;
+  if (confirm('Are you sure you want to clear all blocks?')) {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (shipGrid[r][c].type === 'SPACE') {
+          shipGrid[r][c].block = null;
+          shipGrid[r][c].rotation = 0;
+        }
       }
     }
   }
