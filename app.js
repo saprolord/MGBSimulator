@@ -110,10 +110,10 @@ const BLOCK_IMAGES = {
   'Double Lifetime':   'Images/More_projectile_lifetime.webp',
   'Persistent Damage': 'Images/Persistent_damage.webp',
   'Pierce':            'Images/Pierce.webp',
-  'AOE Radius':        'Images/AOE.webp',
+  'AOE Radius':        'Images/Aoe.webp',
   'AOE Square':        'Images/Square_aoe.webp',
-  'Projectile Magnet': 'Images/bullet_magnet.webp',
-  'Projectile Align':  'Images/bullet_align.webp',
+  'Projectile Magnet': 'Images/Bullet_magnet.webp',
+  'Projectile Align':  'Images/Bullet_align.webp',
   'Line Magnet':       'Images/Ship_line_bullet_magnet.webp',
   'Forward Magnet':    'Images/Forward.webp',
   'Sideways':        'Images/Sideways.webp',
@@ -148,13 +148,19 @@ trialsSlider.addEventListener('input', (e) => syncTrials(e.target.value));
 trialsInput.addEventListener('change', (e) => syncTrials(e.target.value));
 
 // --- PALETTE UI ---
+// Add or import PASSTHROUGH_BLOCKS in app.js or reference it from engine.js
 function buildPaletteUI() {
   paletteContainer.innerHTML = '';
   ITEM_PALETTE.forEach(item => {
     const btn = document.createElement('button');
-    btn.className = 'palette-btn' + (item === selectedPaletteBlock ? ' active' : '');
-    btn.title = item;
-    
+    const isUnimplemented = PASSTHROUGH_BLOCKS.has(item);
+
+    btn.className = 'palette-btn' + 
+      (item === selectedPaletteBlock ? ' active' : '') + 
+      (isUnimplemented ? ' unimplemented' : '');
+      
+    btn.title = isUnimplemented ? `${item} (Visual only - No effect yet)` : item;
+
     if (BLOCK_IMAGES[item]) {
       const img = document.createElement('img');
       img.src = BLOCK_IMAGES[item];
@@ -251,6 +257,13 @@ function drawBlock(x, y, blockName, rotation) {
   ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
   ctx.rotate((rotation * Math.PI) / 180);
 
+  const isUnimplemented = PASSTHROUGH_BLOCKS.has(blockName);
+
+  if (isUnimplemented) {
+    // Apply grayscale and semi-transparency filter to canvas image
+    ctx.filter = 'grayscale(100%) opacity(0.55)';
+  }
+
   const img = loadedImages[blockName];
   if (img && img.complete) {
     ctx.drawImage(img, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
@@ -325,6 +338,16 @@ function getIncomingDirectionAt(targetR, targetC) {
 function updatePathAndGrid() {
   const pathResult = tracePathOnly(shipGrid, GRID_SIZE);
   currentCalculation = { traces: pathResult.traces };
+  
+  // Auto-update URL hash on layout change
+  const code = serializeLayout();
+  if (code) {
+    window.history.replaceState(null, '', `#build=${code}`);
+  } else {
+    // If the grid is empty, clear the hash
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+
   updateUI();
   drawGrid();
 }
