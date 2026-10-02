@@ -331,17 +331,28 @@ canvas#chart-canvas {
   }
 
   .app-container {
-    grid-template-columns: minmax(55px, 15%) 1fr;
+    grid-template-columns: minmax(55px, 20%) 1fr;
     grid-template-areas:
       "palette canvas"
       "results results";
     gap: 10px;
+    
   }
 
   .palette {
     grid-area: palette;
     padding: 6px;
     height: auto;
+  }
+
+  #palette-items {
+    max-height: 500px; /* Or adjust height to fit your desired mobile panel space */
+    overflow-y: scroll;
+    overflow-x: hidden;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 6px;
+    padding: 3px;
   }
 
   .canvas-area {
