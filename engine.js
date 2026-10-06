@@ -14,21 +14,16 @@ const PASSTHROUGH_BLOCKS = new Set([
   'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage',
   'Pierce', 'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align',
   'Line Magnet', 'Forward Magnet', 'Sideways', 'Money Cross', 'Endlife Damage',
-  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile', 'Tenfold Damage',
-  'Gamble damage', 'Charger', 'Damage Cross', 'Max Tier Damage', '4x Damage',
-  'Unused Damage', 'Accumulator', 'Turn Damage', '+100 Damage',
-  'Ejector Damage', 'DoDuplicate Projectile'
+  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile', 
+  'Damage Cross', 'Max Tier Damage', 
+  'Turn Damage'
 ]);
-
 
 function normDir(dir) {
   return (dir % 360 + 360) % 360;
 }
 
-/**
- * LIGHTWEIGHT SINGLE-PASS TRACE FOR UI PREVIEW
- * Used exclusively for canvas trajectory overlays and auto-rotation.
- */
+// LIGHTWEIGHT SINGLE-PASS TRACE FOR UI PREVIEW
 function tracePathOnly(shipGrid, gridSize) {
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
@@ -102,62 +97,306 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
   const isOrig = node.isOriginal ?? true;
 
   switch (tile.block) {
-    case 'Turn Left': {
-      return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];}
-    case 'Turn Right':{
-      return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];}
-    case '+1 Damage':{
-      return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];}
-    case '+1 Projectile':{
+    case 'Turn Left':
+      return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];
+    case 'Turn Right':
+      return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];
+    case '+1 Damage':
+      return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];
+    case '+1 Projectile': {
       let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
       if (isOrig) projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
-      return projList;   }
-    case 'Dual Splitter':{
+      return projList;
+    }
+    case 'Duplicate Projectile': {
+      let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
+      projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
+      return projList;
+    }
+    case 'Dual Splitter':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
-      ];}
-    case '33% x2 Damage':{
-      return [{ ...node, r, c, dir: rot, pathTrace: trace }];}
-      case 'Triple Splitter':{
+      ];
+    case '33% x2 Damage':
+    case 'Tenfold Damage':
+    case 'Gamble Damage':
+    case 'Charger':
+    case 'Unused Damage':
+    case 'Ejector Damage':
+    case '4x Damage':
+    case 'Accumulator':
+      return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+    
+    case '+100 Damage':
+      return [{ ...node, r, c, dir: rot, damage: node.damage + 100, pathTrace: trace }];
+
+    case 'Triple Splitter':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
-      ];}
-    case 'Random Double':{
+      ];
+    case 'Random Double':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
-      ];}
-    case 'Random Triple':{
+      ];
+    case 'Random Triple':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
-      ];}
-    default: {
-      // If block is in PASSTHROUGH_BLOCKS, continue path straight through
+      ];
+    default:
       if (PASSTHROUGH_BLOCKS.has(tile.block)) {
         return [{ ...node, r, c, dir: rot, pathTrace: trace }];
       }
-      // Unrecognized block -> stop trace
       traces.push(trace);
       return [];
-    }
   }
 }
 
 // ============================================================================
-// LEVEL 2: PRE-COMPILED EXECUTION GRAPH ENGINE
+// SEQUENTIAL MONTE CARLO ENGINE (Persistent State Across Simulations)
 // ============================================================================
 
 /**
- * Compiles grid structure into an optimized graph representation.
- * Deterministic steps (turns, straight travel, splitters, +1 damage) are compiled
- * into graph nodes, isolating probabilistic nodes (33% x2 Damage) for fast evaluation.
+ * Runs a single trial across a full multi-shot burst sequence.
+ * Accepts `tileStates` map from outside to mutate state continuously across multiple trial runs.
  */
-function compileShipGraph(shipGrid, gridSize) {
+function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burstCount = 0, burstDamageMult = 1.0, unusedDamageBonus = 0, ejectorUnusedCount=0) {
+  function getChargerState(r, c) {
+    const key = `${r},${c}`;
+    if (!tileStates.has(key)) {
+      tileStates.set(key, { charge: 0 });
+    }
+    return tileStates.get(key);
+  }
+
+  function get4xState(r, c) {
+    const key = `4X_${r},${c}`;
+    if (!tileStates.has(key)) {
+      tileStates.set(key, { lastDamage: null });
+    }
+    return tileStates.get(key);
+  }
+  
+  function getAccumulatorState(r, c) {
+    const key = `acc_${r},${c}`;
+    if (!tileStates.has(key)) {
+      tileStates.set(key, { count: 0, accumulatedDamage: 0 });
+    }
+    return tileStates.get(key);
+  }
+
+  let totalBurstDamage = 0;
+  const totalShots = 1 + burstCount;
+
+  for (let shotIndex = 0; shotIndex < totalShots; shotIndex++) {
+    const shotBaseDamage = (shotIndex === 0) ? baseDamage : baseDamage * burstDamageMult;
+
+    const queue = [{
+      r: emitter.r,
+      c: emitter.c,
+      dir: emitter.dir,
+      damage: shotBaseDamage,
+      isOriginal: true
+    }];
+
+    let steps = 0;
+
+    while (queue.length > 0 && steps < 5000) {
+      steps++;
+      const proj = queue.shift();
+      const vec = DIR_VECTORS[proj.dir];
+      const nextR = proj.r + vec.dr;
+      const nextC = proj.c + vec.dc;
+
+      // Off-grid collision check
+      if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) continue;
+
+      const tile = shipGrid[nextR][nextC];
+
+      if (tile.type === 'WALL') continue;
+
+      if (tile.type === 'EJECTOR') {
+        totalBurstDamage += proj.damage* (1 + unusedDamageBonus);
+        continue;
+      }
+
+      if (tile.type === 'SPACE') {
+        if (!tile.block) {
+          queue.push({ ...proj, r: nextR, c: nextC });
+          continue;
+        }
+
+        const requiredDir = normDir(tile.rotation);
+        if (proj.dir !== requiredDir) continue;
+
+        let currentDmg = proj.damage;
+
+        switch (tile.block) {
+          case 'Turn Left':
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
+            break;
+
+          case 'Turn Right':
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
+            break;
+
+          case '+1 Damage':
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg + 1 });
+            break;
+
+          case '+100 Damage':
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg + 100 });
+            break;
+
+          case 'Unused Damage':
+            queue.push({ ...proj, r: nextR, c: nextC });
+            break;
+
+          case 'Charger': {
+            const state = getChargerState(nextR, nextC);
+            // 1. Gain 10% of stored charge as bonus damage
+            currentDmg += state.charge * 0.10;
+            // 2. Takes away 10% of the charge and stores 20% of updated damage back into Charger
+            state.charge -= state.charge * 0.10;
+            state.charge += currentDmg * 0.20;
+
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+          }
+          case '4x Damage': {
+            const state = get4xState(nextR, nextC);
+
+            // Increase damage by +4 if current damage < previous projectile's damage
+            if (state.lastDamage !== null && currentDmg < state.lastDamage) {
+              currentDmg += 4;
+            }
+
+            // Update tile state with current projectile's incoming damage
+            state.lastDamage = proj.damage;
+
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+          }
+          case 'Accumulator': {
+            const state = getAccumulatorState(nextR, nextC);
+            state.count++;
+            state.accumulatedDamage += currentDmg;
+
+            // Only release a projectile on every 10th hit
+            if (state.count >= 10) {
+              const combinedDamage = state.accumulatedDamage * 2;
+
+              // Reset accumulator state
+              state.count = 0;
+              state.accumulatedDamage = 0;
+
+              // Continue path with doubled combined damage
+              queue.push({ ...proj, r: nextR, c: nextC, damage: combinedDamage });
+            }
+            // Note: If count < 10, nothing is pushed to queue (projectile absorbed)
+            break;
+          }
+          case '33% x2 Damage':
+            if (Math.random() < 0.33) currentDmg *= 2;
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+
+          case 'Tenfold Damage':
+            if (Math.random() < 0.04) currentDmg *= 10;
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+
+          case 'Gamble Damage': {
+            const roll = Math.random() * 13;
+            if (roll < 1) currentDmg *= 0;
+            else if (roll < 10) currentDmg *= 1;
+            else if (roll < 11) currentDmg *= 2;
+            else if (roll < 12) currentDmg *= 3;
+            else currentDmg *= 4;
+
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+          }
+
+          case '+1 Projectile':
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            if (proj.isOriginal) {
+              queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg, isOriginal: false });
+            }
+            break;
+
+          case 'Duplicate Projectile':
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg, isOriginal: false });
+            break;
+
+          case 'Dual Splitter':
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
+            break;
+
+          case 'Triple Splitter':
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir) });
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
+            break;
+          
+          case 'Ejector Damage':
+            // Adds 10 damage for each unused Ejector block in the ship layout
+            currentDmg += ejectorUnusedCount * 10;
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+
+          case 'Random Double': {
+            currentDmg *= 2;
+            const chosenDir = Math.random() < 0.5 ? normDir(requiredDir - 90) : normDir(requiredDir + 90);
+            queue.push({ ...proj, r: nextR, c: nextC, dir: chosenDir, damage: currentDmg });
+            break;
+          }
+
+          case 'Random Triple': {
+            currentDmg *= 3;
+            const rand = Math.random();
+            let chosenDir = normDir(requiredDir);
+            if (rand < 0.3333333333333333) chosenDir = normDir(requiredDir - 90);
+            else if (rand > 0.6666666666666666) chosenDir = normDir(requiredDir + 90);
+
+            queue.push({ ...proj, r: nextR, c: nextC, dir: chosenDir, damage: currentDmg });
+            break;
+          }
+
+          default:
+            if (PASSTHROUGH_BLOCKS.has(tile.block)) {
+              queue.push({ ...proj, r: nextR, c: nextC });
+            }
+            break;
+        }
+      }
+    }
+  }
+
+  return totalBurstDamage;
+}
+
+/**
+ * HIGH-SPEED MONTE CARLO SIMULATION
+ */
+function calculateShip(
+  shipGrid, 
+  gridSize, 
+  baseDamage = 1, 
+  baseFireRate = 1, 
+  numSimulations = 100000, 
+  onProgress = null,
+  config = {}
+) {
+  const { burstCount = 0, burstDamageMult = 1.0 } = config;
+
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
@@ -168,294 +407,94 @@ function compileShipGraph(shipGrid, gridSize) {
     }
   }
 
-  if (!emitter) return null;
-
-  let nodes = [];
-  let visitedKeyToId = new Map();
-
-  function getKey(r, c, dir, isOriginal) {
-    return `${r},${c},${dir},${isOriginal ? 1 : 0}`;
-  }
-
-  function resolvePath(startR, startC, startDir, startIsOrig) {
-    const key = getKey(startR, startC, startDir, startIsOrig);
-    if (visitedKeyToId.has(key)) {
-      return visitedKeyToId.get(key);
-    }
-
-    let nodeId = nodes.length;
-    visitedKeyToId.set(key, nodeId);
-
-    // Placeholder node
-    let node = {
-      id: nodeId,
-      flatAdd: 0,
-      probMultiplier: 1, // 1 = deterministic, 2 = 33% chance x2
-      nextNodes: [],
-      isEjector: false
-    };
-    nodes.push(node);
-
-    let currR = startR;
-    let currC = startC;
-    let currDir = startDir;
-    let isOrig = startIsOrig;
-    let accumulatedAdd = 0;
-    let steps = 0;
-
-    while (steps < 1000) {
-      steps++;
-      const vec = DIR_VECTORS[currDir];
-      let nextR = currR + vec.dr;
-      let nextC = currC + vec.dc;
-
-      // Off-grid or hit outer wall -> Termination
-      if (nextR < 0 || nextR >= gridSize || nextC < 0 || nextC >= gridSize) {
-        node.flatAdd = accumulatedAdd;
-        return nodeId;
-      }
-
-      const targetTile = shipGrid[nextR][nextC];
-
-      if (targetTile.type === 'WALL') {
-        node.flatAdd = accumulatedAdd;
-        return nodeId;
-      }
-
-      if (targetTile.type === 'EJECTOR') {
-        node.flatAdd = accumulatedAdd;
-        node.isEjector = true;
-        return nodeId;
-      }
-
-      if (targetTile.type === 'SPACE') {
-        if (!targetTile.block) {
-          currR = nextR;
-          currC = nextC;
-          continue;
-        }
-
-        const requiredDir = normDir(targetTile.rotation);
-        if (currDir !== requiredDir) {
-          // Blocked by wrong-facing modifier entry
-          node.flatAdd = accumulatedAdd;
-          return nodeId;
-        }
-
-        const block = targetTile.block;
-        currR = nextR;
-        currC = nextC;
-
-        if (block === 'Turn Left') {
-          currDir = normDir(requiredDir - 90);
-        } else if (block === 'Turn Right') {
-          currDir = normDir(requiredDir + 90);
-        } else if (block === '+1 Damage') {
-          accumulatedAdd += 1;
-        } else if (block === '+1 Projectile') {
-          node.flatAdd = accumulatedAdd;
-          let next1 = resolvePath(currR, currC, currDir, isOrig);
-          node.nextNodes.push(next1);
-          if (isOrig) {
-            let next2 = resolvePath(currR, currC, currDir, false);
-            node.nextNodes.push(next2);
-          }
-          return nodeId;
-        } else if (block === 'Dual Splitter') {
-          node.flatAdd = accumulatedAdd;
-          let leftDir = normDir(requiredDir - 90);
-          let rightDir = normDir(requiredDir + 90);
-          node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));
-          node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig));
-          return nodeId;
-        } else if (block === '33% x2 Damage') {
-          node.flatAdd = accumulatedAdd;
-          node.probMultiplier = 2; // Flag as 33% x2 chance
-          node.nextNodes.push(resolvePath(currR, currC, currDir, isOrig));
-          return nodeId;
-        }
-         else if (block === 'Triple Splitter') {
-          node.flatAdd = accumulatedAdd;
-          let leftDir = normDir(requiredDir - 90);
-          let rightDir = normDir(requiredDir + 90);
-          let next1 = resolvePath(currR, currC, currDir, isOrig);
-          node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));
-          node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig));
-          node.nextNodes.push(next1);
-          return nodeId;
-        } 
-          else if (block === 'Random Double') {
-            node.flatAdd = accumulatedAdd;
-            node.probMultiplier = 3; // Tag: Random 50/50 path branch + x2 Damage
-            let leftDir = normDir(requiredDir - 90);
-            let rightDir = normDir(requiredDir + 90);
-            node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));  // index 0: Left
-            node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig)); // index 1: Right
-            return nodeId;
-        } 
-          else if (block === 'Random Triple') {
-            node.flatAdd = accumulatedAdd;
-            node.probMultiplier = 4; // Tag: Random 33/33/33 path branch + x3 Damage
-            let leftDir = normDir(requiredDir - 90);
-            let rightDir = normDir(requiredDir + 90);
-            node.nextNodes.push(resolvePath(currR, currC, leftDir, isOrig));  // index 0: Left
-            node.nextNodes.push(resolvePath(currR, currC, currDir, isOrig));  // index 1: Straight
-            node.nextNodes.push(resolvePath(currR, currC, rightDir, isOrig)); // index 2: Right
-            return nodeId;
-        }
-      }
-    }
-
-    node.flatAdd = accumulatedAdd;
-    return nodeId;
-  }
-
-  let rootId = resolvePath(emitter.r, emitter.c, emitter.dir, true);
-  return { rootId, nodes };
-}
-
-/**
- * HIGH-SPEED MONTE CARLO SIMULATION
- * Uses flat pre-allocated arrays, compiled graph traversal, and time-sliced
- * frame execution for smooth progress reporting without blocking the UI.
- */
-function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, numSimulations = 1000000, onProgress = null) {
-  const compiled = compileShipGraph(shipGrid, gridSize);
-
-  if (!compiled) {
+  if (!emitter) {
     const emptyResult = { traces: [], totalEjected: 0, ev: 0, min: 0, max: 0, dist: { 0: 1.0 } };
-    if (onProgress) {
-      onProgress(numSimulations, numSimulations);
-      return Promise.resolve(emptyResult);
-    }
-    return emptyResult;
+    if (onProgress) onProgress(numSimulations, numSimulations);
+    return Promise.resolve(emptyResult);
   }
 
-  const { rootId, nodes } = compiled;
-  const numNodes = nodes.length;
-
-  // Flatten graph structures into pre-allocated typed arrays
-  const nodeFlatAdd = new Int32Array(numNodes);
-  const nodeIsEjector = new Uint8Array(numNodes);
-  const nodeProbMult = new Uint8Array(numNodes);
-  const nextNodesOffset = new Int32Array(numNodes);
-  const nextNodesCount = new Int32Array(numNodes);
-
-  // Flatten edges list
-  let totalEdges = 0;
-  for (let i = 0; i < numNodes; i++) {
-    totalEdges += nodes[i].nextNodes.length;
-  }
-  const edgeList = new Int32Array(totalEdges);
-
-  let edgeIdx = 0;
-  for (let i = 0; i < numNodes; i++) {
-    const n = nodes[i];
-    nodeFlatAdd[i] = n.flatAdd;
-    nodeIsEjector[i] = n.isEjector ? 1 : 0;
-    nodeProbMult[i] = n.probMultiplier;
-
-    nextNodesOffset[i] = edgeIdx;
-    nextNodesCount[i] = n.nextNodes.length;
-
-    for (let j = 0; j < n.nextNodes.length; j++) {
-      edgeList[edgeIdx++] = n.nextNodes[j];
+  // Count unused Ejector blocks for Unused Damage modifier
+  // Find all EJECTOR coordinates on the grid
+  const ejectorPositions = [];
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
+      if (shipGrid[r][c].type === 'EJECTOR') {
+        ejectorPositions.push(`${r},${c}`);
+      }
     }
   }
+  // Run preview path trace to find hit ejectors
+  const pathResult = tracePathOnly(shipGrid, gridSize);
+  const hitEjectors = new Set();
+  pathResult.traces.forEach(trace => {
+    const lastPoint = trace[trace.length - 1];
+    if (lastPoint && shipGrid[lastPoint.r][lastPoint.c].type === 'EJECTOR') {
+      hitEjectors.add(`${lastPoint.r},${lastPoint.c}`);
+    }
+  });
+  // Count unused ejectors (total ejectors minus hit ejectors)
+  const ejectorUnusedCount = ejectorPositions.filter(pos => !hitEjectors.has(pos)).length;
 
-  // Pre-allocated stack buffers for traversal (Zero GC during evaluation)
-  const MAX_STACK = 4096; // 4k stack depth should be sufficient for any reasonable ship layout
-  const stackNodeId = new Int32Array(MAX_STACK);
-  const stackDamage = new Float64Array(MAX_STACK);
+  //Check if an "Unused Damage" block is present anywhere on the grid
+  let hasUnusedDamageBlock = false;
+  let emptySpaceCount = 0;
 
-  // Frequency Map for damage outcomes (sampled up to 50k to eliminate Map lookup bottlenecks)
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
+      const tile = shipGrid[r][c];
+      if (tile.type === 'SPACE') {
+        if (!tile.block) {
+          emptySpaceCount++;
+        } else if (tile.block === 'Unused Damage') {
+          hasUnusedDamageBlock = true;
+        }
+      }
+    }
+  }
+  // Only apply the bonus if the block exists on the layout
+  const unusedDamageBonus = hasUnusedDamageBlock ? emptySpaceCount*0.1 : 0;
+
+  // Persistent tile states map initialized ONCE for the entire simulation batch
+  const persistentTileStates = new Map();
+
   const damageCounts = new Map();
   const MAX_HISTOGRAM_SAMPLES = 50000;
   const sampleStride = numSimulations > MAX_HISTOGRAM_SAMPLES
     ? Math.ceil(numSimulations / MAX_HISTOGRAM_SAMPLES)
     : 1;
-  let histogramSamples = 0;
 
+  let histogramSamples = 0;
   let totalDamageSum = 0;
   let globalMin = Infinity;
   let globalMax = -Infinity;
 
-  // Simulation execution helper for a batch of trials
   function executeBatch(startSim, count) {
     const endSim = Math.min(startSim + count, numSimulations);
 
     for (let sim = startSim; sim < endSim; sim++) {
-      let stackPtr = 0;
-      stackNodeId[0] = rootId;
-      stackDamage[0] = baseDamage;
-      stackPtr = 1;
+      // Pass persistentTileStates so simulation N carries over charge from N-1
+      const rawDamage = runBurstTrial(
+        shipGrid, 
+        gridSize, 
+        emitter, 
+        baseDamage, 
+        persistentTileStates, 
+        burstCount, 
+        burstDamageMult,
+        unusedDamageBonus,
+        ejectorUnusedCount
+      );
 
-      let simDamage = 0;
-
-      while (stackPtr > 0) {
-        stackPtr--;
-        let currId = stackNodeId[stackPtr];
-        let currDmg = stackDamage[stackPtr];
-
-        // Linear Path Shortcut: follow single-exit chains without stack push/pop
-        while (true) {
-          currDmg += nodeFlatAdd[currId];
-
-          const probType = nodeProbMult[currId];
-
-          if (probType === 2) {
-            // 33% x2 Damage
-            if (Math.random() < 0.33) {
-              currDmg *= 2;
-            }
-          } else if (probType === 3) {
-            // Random Double Damage: 50% Right, 50% Left + 2x Damage
-            currDmg *= 2;
-            const offset = nextNodesOffset[currId];
-            const pick = Math.random() < 0.5 ? 1 : 0; // 50% Right (index 1), 50% Left (index 0)
-            currId = edgeList[offset + pick];
-            continue;
-          } else if (probType === 4) {
-            // Random Triple Damage: ~33.33% Left, ~33.33% Straight, ~33.33% Right + 3x Damage
-            currDmg *= 3;
-            const offset = nextNodesOffset[currId];
-            const rand = Math.random();
-            const pick = rand < 0.3333333333333333 ? 0 : (rand < 0.6666666666666666 ? 1 : 2);
-            currId = edgeList[offset + pick];
-            continue;
-          }
-
-          if (nodeIsEjector[currId] === 1) {
-            simDamage += currDmg;
-          }
-
-          const count = nextNodesCount[currId];
-          if (count === 1) {
-            currId = edgeList[nextNodesOffset[currId]];
-            continue;
-          }
-
-          if (count > 1) {
-            // Standard splitters (Dual, Triple, +1 Projectile) that clone bullets
-            const offset = nextNodesOffset[currId];
-            for (let k = 0; k < count; k++) {
-              if (stackPtr < MAX_STACK) {
-                stackNodeId[stackPtr] = edgeList[offset + k];
-                stackDamage[stackPtr] = currDmg;
-                stackPtr++;
-              }
-            }
-          }
-          break;
-        }
-      }
+      const simDamage = Math.round(rawDamage);
 
       if (sim % sampleStride === 0) {
-        damageCounts.set(simDamage, (damageCounts.get(simDamage) || 0) + 1);
+        // Round damage to nearest integer before storing
+        const roundedDmg = Math.round(simDamage);
+        damageCounts.set(roundedDmg, (damageCounts.get(roundedDmg) || 0) + 1);
         histogramSamples++;
       }
-      totalDamageSum += simDamage;
 
+      totalDamageSum += simDamage;
       if (simDamage < globalMin) globalMin = simDamage;
       if (simDamage > globalMax) globalMax = simDamage;
     }
@@ -480,27 +519,23 @@ function calculateShip(shipGrid, gridSize, baseDamage = 1, baseFireRate = 1, num
     };
   }
 
-  // If no onProgress callback, run synchronously
+  // Synchronous run if no progress callback passed
   if (!onProgress) {
     executeBatch(0, numSimulations);
     return finalize();
   }
 
-  // Time-sliced asynchronous run with resolution of 10,000 trials
+  // Asynchronous frame-budgeted execution loop
   return new Promise((resolve) => {
     let currentSim = 0;
-    const RESOLUTION = 10000;
+    const RESOLUTION = 2000;
 
     function processFrame() {
       const frameStart = performance.now();
 
       while (currentSim < numSimulations) {
         currentSim = executeBatch(currentSim, RESOLUTION);
-
-        // Yield if more than 12ms elapsed in this frame to maintain 60 FPS
-        if (performance.now() - frameStart >= 12) {
-          break;
-        }
+        if (performance.now() - frameStart >= 12) break;
       }
 
       onProgress(currentSim, numSimulations);

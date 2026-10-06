@@ -21,8 +21,8 @@ const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter','
 // Available Items
 const ITEM_PALETTE = [
   'Turn Right', 'Turn Left', 'Dual Splitter',
-  '+1 Damage', '+1 Projectile', '33% x2 Damage', 'Triple Splitter',
-  'Random Double', 'Random Triple', 'Tenfold Damage', 'Gamble damage', 'Charger', 'Damage Cross', 'Max Tier Damage',
+  'Triple Splitter', '+1 Damage', '+1 Projectile', '33% x2 Damage',
+  'Tenfold Damage', 'Gamble Damage', 'Charger', 'Damage Cross','Random Double', 'Random Triple', 'Max Tier Damage',
   '4x Damage', 'Unused Damage', 'Accumulator', 'Turn Damage', '+100 Damage', 'Ejector Damage', 'Duplicate Projectile',
   'More Speed', 'Less Speed', 'Eject Left', 'Eject Right', 'Eject Randomly', 'Eject Narrow', 'Curve Left', 'Curve Right',
   'Curve Random', 'Bounce back', 'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage', 'Pierce', 
@@ -82,7 +82,7 @@ const BLOCK_IMAGES = {
   'Random Double':   'Images/Random_double.webp',
   'Random Triple':   'Images/Random_triple.webp',
   'Tenfold Damage':  'Images/Tenfold_damage.webp',
-  'Gamble damage':  'Images/Gamble_damage.webp',
+  'Gamble Damage':  'Images/Gamble_damage.webp',
   'Charger':          'Images/Damage_regulator.webp',
   'Damage Cross':      'Images/Damage_loop.webp',
   'Max Tier Damage':      'Images/Max_tier_damage.webp',
@@ -138,7 +138,7 @@ Object.entries(BLOCK_IMAGES).forEach(([key, src]) => {
 function syncTrials(val) {
   let num = parseInt(val, 10);
   if (isNaN(num)) num = 1000000;
-  num = Math.max(1000, Math.min(5000000, num));
+  num = Math.max(1, Math.min(5000000, num));
   
   trialsSlider.value = num;
   trialsInput.value = num;
@@ -624,8 +624,17 @@ const BLOCK_CATALOG = [
   '33% x2 Damage',   // 05
   'Triple Splitter', // 06
   'Random Double',   // 07
-  'Random Triple'    // 08
-  // Additional blocks (up to 62+) can be appended here
+  'Random Triple',    // 08
+  'Tenfold Damage',  // 09
+  'Gamble Damage',      // 0A
+  '+100 Damage' ,        // 0B
+  'Duplicate Projectile', // 0C
+  'Charger',          // 0D
+  'Unused Damage',      // 0E
+  'Ejector Damage',      // 0F
+  'Accumulator',    // 10
+  '4X Damage' ,      // 11  
+  // Additional blocks (up to 64) can be appended here
 ];
 
 function showToast(message) {
