@@ -168,7 +168,7 @@ canvas#ship-canvas {
 }
 
 .palette-btn:hover {
-  background-color: #3a3a3a;
+  background-color: #00c3ff81;
 }
 
 .palette-btn.active {
@@ -365,6 +365,27 @@ canvas#chart-canvas {
     width: 100%;
     height: auto;
   }
+
+  /* Palette style for unimplemented / passthrough blocks */
+  .palette-btn.unimplemented img {
+    filter: grayscale(40%) opacity(0.5);
+    transition: filter 0.2s ease;
+  }
+
+  .palette-btn.unimplemented:hover img {
+    filter: grayscale(0%) opacity(0.8);
+  }
+}
+
+/* Palette item buttons styling for unimplemeted blocks */
+.palette-btn.unimplemented img {
+  filter: grayscale(40%) opacity(0.45);
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+/* Hover feedback */
+.palette-btn.unimplemented:hover img {
+  filter: grayscale(0%) opacity(0.8);
 }
 
 /* Toast Notification */
