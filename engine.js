@@ -271,9 +271,9 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
           case '4x Damage': {
             const state = get4xState(nextR, nextC);
 
-            // Increase damage by +4 if current damage < previous projectile's damage
+            // Increase damage by x4 if current damage < previous projectile's damage
             if (state.lastDamage !== null && currentDmg < state.lastDamage) {
-              currentDmg += 4;
+              currentDmg *= 4;
             }
 
             // Update tile state with current projectile's incoming damage
@@ -386,6 +386,9 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
 /**
  * HIGH-SPEED MONTE CARLO SIMULATION
  */
+/**
+ * HIGH-SPEED MONTE CARLO SIMULATION
+ */
 function calculateShip(
   shipGrid, 
   gridSize, 
@@ -413,8 +416,7 @@ function calculateShip(
     return Promise.resolve(emptyResult);
   }
 
-  // Count unused Ejector blocks for Unused Damage modifier
-  // Find all EJECTOR coordinates on the grid
+  // Count unused Ejector blocks for Ejector Damage modifier
   const ejectorPositions = [];
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
@@ -423,7 +425,7 @@ function calculateShip(
       }
     }
   }
-  // Run preview path trace to find hit ejectors
+
   const pathResult = tracePathOnly(shipGrid, gridSize);
   const hitEjectors = new Set();
   pathResult.traces.forEach(trace => {
@@ -432,10 +434,9 @@ function calculateShip(
       hitEjectors.add(`${lastPoint.r},${lastPoint.c}`);
     }
   });
-  // Count unused ejectors (total ejectors minus hit ejectors)
   const ejectorUnusedCount = ejectorPositions.filter(pos => !hitEjectors.has(pos)).length;
 
-  //Check if an "Unused Damage" block is present anywhere on the grid
+  // Check Unused Damage bonus
   let hasUnusedDamageBlock = false;
   let emptySpaceCount = 0;
 
@@ -451,19 +452,12 @@ function calculateShip(
       }
     }
   }
-  // Only apply the bonus if the block exists on the layout
-  const unusedDamageBonus = hasUnusedDamageBlock ? emptySpaceCount*0.1 : 0;
+  const unusedDamageBonus = hasUnusedDamageBlock ? emptySpaceCount * 0.1 : 0;
 
-  // Persistent tile states map initialized ONCE for the entire simulation batch
+  // Persistent tile states map across all trials
   const persistentTileStates = new Map();
-
   const damageCounts = new Map();
-  const MAX_HISTOGRAM_SAMPLES = 50000;
-  const sampleStride = numSimulations > MAX_HISTOGRAM_SAMPLES
-    ? Math.ceil(numSimulations / MAX_HISTOGRAM_SAMPLES)
-    : 1;
 
-  let histogramSamples = 0;
   let totalDamageSum = 0;
   let globalMin = Infinity;
   let globalMax = -Infinity;
@@ -472,7 +466,6 @@ function calculateShip(
     const endSim = Math.min(startSim + count, numSimulations);
 
     for (let sim = startSim; sim < endSim; sim++) {
-      // Pass persistentTileStates so simulation N carries over charge from N-1
       const rawDamage = runBurstTrial(
         shipGrid, 
         gridSize, 
@@ -487,12 +480,8 @@ function calculateShip(
 
       const simDamage = Math.round(rawDamage);
 
-      if (sim % sampleStride === 0) {
-        // Round damage to nearest integer before storing
-        const roundedDmg = Math.round(simDamage);
-        damageCounts.set(roundedDmg, (damageCounts.get(roundedDmg) || 0) + 1);
-        histogramSamples++;
-      }
+      // Record 100% of trials into exact frequency Map (no sampleStride)
+      damageCounts.set(simDamage, (damageCounts.get(simDamage) || 0) + 1);
 
       totalDamageSum += simDamage;
       if (simDamage < globalMin) globalMin = simDamage;
@@ -502,12 +491,40 @@ function calculateShip(
     return endSim;
   }
 
-  function finalize() {
+function finalize() {
     let dist = {};
-    const sampleBase = histogramSamples || 1;
-    damageCounts.forEach((count, dmg) => {
-      dist[dmg] = Number((count / sampleBase).toFixed(4));
-    });
+    const maxChartBars = 30;
+
+    // If output spread is dense (e.g. Charger produces >30 distinct values), collapse into dynamic bins
+    if (damageCounts.size > maxChartBars && globalMax > globalMin) {
+      const binWidth = Math.ceil((globalMax - globalMin + 1) / maxChartBars);
+      const rawBins = new Map();
+
+      // Collect raw bucket counts
+      damageCounts.forEach((count, dmg) => {
+        const bucketStart = Math.floor((dmg - globalMin) / binWidth) * binWidth + globalMin;
+        rawBins.set(bucketStart, (rawBins.get(bucketStart) || 0) + count);
+      });
+
+      // Sort bucket starts numerically ascending
+      const sortedStarts = Array.from(rawBins.keys()).sort((a, b) => a - b);
+
+      // Populate dist in strictly ascending numerical order
+      sortedStarts.forEach(start => {
+        const end = start + binWidth - 1;
+        const label = `${start}-${end}`;
+        dist[label] = Number((rawBins.get(start) / numSimulations).toFixed(4));
+      });
+
+    } else {
+      // Small set of distinct keys (Accumulators, Splitters, basic multipliers)
+      // Sort numeric damage keys ascending
+      const sortedDamages = Array.from(damageCounts.keys()).sort((a, b) => a - b);
+
+      sortedDamages.forEach(dmg => {
+        dist[dmg] = Number((damageCounts.get(dmg) / numSimulations).toFixed(4));
+      });
+    }
 
     return {
       traces: [],
@@ -519,16 +536,16 @@ function calculateShip(
     };
   }
 
-  // Synchronous run if no progress callback passed
+  // Synchronous execution fallback
   if (!onProgress) {
     executeBatch(0, numSimulations);
     return finalize();
   }
 
-  // Asynchronous frame-budgeted execution loop
+  // Frame-budgeted execution
   return new Promise((resolve) => {
     let currentSim = 0;
-    const RESOLUTION = 2000;
+    const RESOLUTION = 2500;
 
     function processFrame() {
       const frameStart = performance.now();
