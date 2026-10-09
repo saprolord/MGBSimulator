@@ -32,7 +32,7 @@ const ITEM_PALETTE = [
 
 // Layout Setup
 shipGrid[10][5] = { type: 'EMITTER', block: null, rotation: 0 }; 
-shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 };
+shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 }; 
 for (let r = 0; r < GRID_SIZE; r++) {
   shipGrid[r][0] = { type: 'WALL', block: null, rotation: 0 };
   shipGrid[r][GRID_SIZE - 1] = { type: 'WALL', block: null, rotation: 0 };
@@ -134,18 +134,26 @@ Object.entries(BLOCK_IMAGES).forEach(([key, src]) => {
   loadedImages[key] = img;
 });
 
-// --- TRIALS CONTROLS SYNCHRONIZATION ---
-function syncTrials(val) {
-  let num = parseInt(val, 10);
-  if (isNaN(num)) num = 1000000;
-  num = Math.max(1, Math.min(5000000, num));
-  
-  trialsSlider.value = num;
-  trialsInput.value = num;
-}
 
-trialsSlider.addEventListener('input', (e) => syncTrials(e.target.value));
-trialsInput.addEventListener('change', (e) => syncTrials(e.target.value));
+
+// --- TRIALS CONTROLS SYNCHRONIZATION (Logarithmic) ---
+const MIN_SIMS = 1;
+const MAX_SIMS = 5000000;
+
+trialsSlider.addEventListener('input', (e) => {
+  // Linear slider value (0 to 1) -> exponential scale
+  const val = e.target.value / 1000;
+  const sims = Math.round(MIN_SIMS * Math.pow(MAX_SIMS / MIN_SIMS, val));
+  trialsInput.value = sims;
+});
+
+trialsInput.addEventListener('change', (e) => {
+  let num = parseInt(e.target.value, 10) || 1000000;
+  num = Math.max(MIN_SIMS, Math.min(MAX_SIMS, num));
+  trialsInput.value = num;
+  // Reverse: logarithmic value -> linear slider position (0 to 1000)
+  trialsSlider.value = Math.round((Math.log(num / MIN_SIMS) / Math.log(MAX_SIMS / MIN_SIMS)) * 1000);
+});
 
 // --- PALETTE UI ---
 // Add or import PASSTHROUGH_BLOCKS in app.js or reference it from engine.js
@@ -627,19 +635,46 @@ const BLOCK_CATALOG = [
   '33% x2 Damage',   // 05
   'Triple Splitter', // 06
   'Random Double',   // 07
-  'Random Triple',    // 08
+  'Random Triple',   // 08
   'Tenfold Damage',  // 09
-  'Gamble Damage',      // 0A
-  '+100 Damage' ,        // 0B
+  'Gamble Damage',   // 0A
+  '+100 Damage' ,    // 0B
   'Duplicate Projectile', // 0C
-  'Charger',          // 0D
-  'Unused Damage',      // 0E
-  'Ejector Damage',      // 0F
-  'Accumulator',    // 10
+  'Charger',         // 0D
+  'Unused Damage',   // 0E
+  'Ejector Damage',  // 0F
+  'Accumulator',     // 10
   '4X Damage' ,      // 11  
-  'Max Tier Damage',      // 12
-  'Turn Damage',      // 13
-  'Damage Cross',      // 14
+  'Max Tier Damage', // 12
+  'Turn Damage',     // 13
+  'Damage Cross',    // 14
+  'More Speed',     // 15
+  'Less Speed',     // 16
+  'Eject Left',     // 17
+  'Eject Right',    // 18
+  'Eject Randomly', // 19
+  'Eject Narrow',   // 1A
+  'Curve Left',     // 1B
+  'Curve Right',    // 1C
+  'Curve Random',   // 1D
+  'Bounce back',    // 1E
+  'Bounce randomly', // 1F
+  'Ricochet',       // 20
+  'Double Lifetime',  // 21
+  'Persistent Damage', // 22   
+  'Pierce',           // 23
+  'AOE Radius',       // 24
+  'AOE Square',     // 25
+  'Projectile Magnet',  // 26
+  'Projectile Align',   // 27
+  'Line Magnet',      // 28
+  'Forward Magnet',   // 29
+  'Sideways',         // 2A
+  'Money Cross',      // 2B
+  'Endlife Damage',   // 2C
+  'Slow Damage',    // 2D
+  'Zigzag Projectile',    // 2E
+  'Double Less Projectile'  // 2F
   // Additional blocks (up to 64) can be appended here
 ];
 
