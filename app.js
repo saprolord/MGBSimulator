@@ -11,10 +11,6 @@ let selectedPaletteBlock = null;
 let currentCalculation = null;
 let chartInstance = null;
 
-// Default ship base damage
-let baseDamage = 1;
-let baseFireRate = 1;
-
 // Directional blocks that should NOT be cleared by "Clear Path"
 const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter','Triple Splitter','Random Double','Random Triple']);
 
@@ -492,6 +488,9 @@ async function runCalculation() {
   const numTrials = parseInt(trialsInput.value, 10) || 1000000;
   //Get max tier value from html element
   const maxTierValue = parseInt(document.getElementById('maxTierInput').value, 10) || 0;
+  // Default ship base damage
+  let baseDamage = 1;
+  let baseFireRate = parseFloat(document.getElementById('fireRateInput').value);
 
   btnCalc.disabled = true;
   progressWrapper.classList.add('active');
@@ -600,7 +599,7 @@ function updateChart(calcResult) {
       },
       scales: {
         x: { 
-          title: { display: true, text: 'Damage Output', color: '#888888', font: { size: 11 } },
+          title: { display: true, text: 'Damage Output per Seconds', color: '#888888', font: { size: 11 } },
           ticks: { color: '#cccccc' },
           grid: { display: false }
         },

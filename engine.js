@@ -487,12 +487,8 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
   return totalBurstDamage;
 }
 
-/**
- * HIGH-SPEED MONTE CARLO SIMULATION
- */
-/**
- * HIGH-SPEED MONTE CARLO SIMULATION
- */
+/* HIGH-SPEED MONTE CARLO SIMULATION*/
+
 function calculateShip(
   shipGrid, 
   gridSize, 
@@ -571,7 +567,7 @@ function calculateShip(
     const endSim = Math.min(startSim + count, numSimulations);
 
     for (let sim = startSim; sim < endSim; sim++) {
-      const rawDamage = runBurstTrial(
+      const rawDamage = baseFireRate * runBurstTrial(
         shipGrid, 
         gridSize, 
         emitter, 
@@ -584,7 +580,7 @@ function calculateShip(
         maxTier
       );
 
-      const simDamage = Math.round(rawDamage);
+      const simDamage = Math.round(rawDamage*10)/10;
 
       // Record 100% of trials into exact frequency Map (no sampleStride)
       damageCounts.set(simDamage, (damageCounts.get(simDamage) || 0) + 1);
@@ -603,25 +599,30 @@ function finalize() {
 
     // If output spread is dense (e.g. Charger produces >30 distinct values), collapse into dynamic bins
     if (damageCounts.size > maxChartBars && globalMax > globalMin) {
-      const binWidth = Math.ceil((globalMax - globalMin + 1) / maxChartBars);
+      // 1. Force the minimum bin width to be at least 1 whole integer
+      const minVal = Math.floor(globalMin);
+      const maxVal = Math.ceil(globalMax);
+      const binWidth = Math.max(1, Math.ceil((maxVal - minVal + 1) / maxChartBars));
       const rawBins = new Map();
 
-      // Collect raw bucket counts
+      // 2. Bucket each recorded damage value into integer step slots
       damageCounts.forEach((count, dmg) => {
-        const bucketStart = Math.floor((dmg - globalMin) / binWidth) * binWidth + globalMin;
-        rawBins.set(bucketStart, (rawBins.get(bucketStart) || 0) + count);
+        const binIndex = Math.floor((dmg - minVal) / binWidth);
+        rawBins.set(binIndex, (rawBins.get(binIndex) || 0) + count);
       });
 
-      // Sort bucket starts numerically ascending
-      const sortedStarts = Array.from(rawBins.keys()).sort((a, b) => a - b);
+      // 3. Sort bin indices numerically ascending
+      const sortedIndices = Array.from(rawBins.keys()).sort((a, b) => a - b);
 
-      // Populate dist in strictly ascending numerical order
-      sortedStarts.forEach(start => {
+      // 4. Construct clean, integer-bounded, non-overlapping label ranges
+      sortedIndices.forEach(idx => {
+        const start = minVal + idx * binWidth;
         const end = start + binWidth - 1;
-        const label = `${start}-${end}`;
-        dist[label] = Number((rawBins.get(start) / numSimulations).toFixed(4));
-      });
 
+        // Single-integer range vs. multi-integer range
+        const label = (start === end) ? `${start}` : `${start}-${end}`;
+        dist[label] = Number((rawBins.get(idx) / numSimulations).toFixed(4));
+      });
     } else {
       // Small set of distinct keys (Accumulators, Splitters, basic multipliers)
       // Sort numeric damage keys ascending

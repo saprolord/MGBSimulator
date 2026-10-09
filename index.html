@@ -29,14 +29,14 @@
           <span id="selected-info">Tile: Empty</span>
         </div>
         <div class="action-row btn-row">
+          <button id="btn-delete" class="action-btn" title="Delete Block [Del]">
+            <img src="Images/Delete.jpg" alt="Delete">
+          </button>
           <button id="btn-rotate-ccw" class="action-btn" title="Rotate CCW (↺)">
             <img src="Images/Rotate_ccw.jpg" alt="Rotate CCW">
           </button>
           <button id="btn-rotate-cw" class="action-btn" title="Rotate CW (↻)">
             <img src="Images/Rotate_cw.jpg" alt="Rotate CW">
-          </button>
-          <button id="btn-delete" class="action-btn" title="Delete Block [Del]">
-            <img src="Images/Delete.jpg" alt="Delete">
           </button>
           <button id="btn-clear-path" class="action-btn" title="Clear Non-Directional Blocks">
             <img src="Images/Clear.jpg" alt="Clear Path Blocks">
@@ -61,11 +61,11 @@
       <div class="config-grid-row">
         <div class="input-field-group">
           <label for="maxTierInput">Max Tier Reached:</label>
-          <input type="number" id="maxTierInput" min="0" step="1" value="0" placeholder="e.g. 700"/>
+          <input type="number" id="maxTierInput" min="0" step="1" value="0" placeholder="e.g. 700" style="text-align: center;"/>
         </div>
         <div class="input-field-group">
           <label for="fireRateInput">Fire Rate:</label>
-          <input type="number" id="fireRateInput" min="0.1" step="0.1" value="1.0" placeholder="e.g. 1.0"/>
+          <input type="number" id="fireRateInput" min="0.1" step="0.1" value="1.0" placeholder="e.g. 1.0" style="text-align: center;"/>
         </div>
       </div>
 
