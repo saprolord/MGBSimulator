@@ -482,6 +482,8 @@ btnCalc.addEventListener('click', () => {
 
 async function runCalculation() {
   const numTrials = parseInt(trialsInput.value, 10) || 1000000;
+  //Get max tier value from html element
+  const maxTierValue = parseInt(document.getElementById('maxTierInput').value, 10) || 0;
 
   btnCalc.disabled = true;
   progressWrapper.classList.add('active');
@@ -498,6 +500,7 @@ async function runCalculation() {
     baseDamage,
     baseFireRate,
     numTrials,
+    maxTierValue,
     (completed, total) => {
       const pct = Math.min(100, (completed / total) * 100).toFixed(1);
       progressBar.style.width = `${pct}%`;
@@ -634,6 +637,9 @@ const BLOCK_CATALOG = [
   'Ejector Damage',      // 0F
   'Accumulator',    // 10
   '4X Damage' ,      // 11  
+  'Max Tier Damage',      // 12
+  'Turn Damage',      // 13
+  'Damage Cross',      // 14
   // Additional blocks (up to 64) can be appended here
 ];
 
