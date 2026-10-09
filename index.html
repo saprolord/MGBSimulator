@@ -25,51 +25,72 @@
         <canvas id="ship-canvas" width="600" height="600"></canvas>
       </div>
       <div class="action-bar">
-        <span id="selected-info">Tile: Empty</span>
-        <button id="btn-rotate-ccw" class="action-btn" title="Rotate CCW (↺)">
-          <img src="Images/Rotate_ccw.jpg" alt="Rotate CCW">
-        </button>
-
-        <button id="btn-rotate-cw" class="action-btn" title="Rotate CW (↻)">
-          <img src="Images/Rotate_cw.jpg" alt="Rotate CW">
-        </button>
-        
-        <button id="btn-delete" class="action-btn" title="Delete Block [Del]">
-          <img src="Images/Delete.jpg" alt="Delete">
-        </button>
-        
-        <button id="btn-clear-path" class="action-btn" title="Clear Non-Directional Blocks">
-          <img src="Images/Clear.jpg" alt="Clear Path Blocks">
-        </button>
-
-        <button id="btn-clear" class="action-btn" title="Clear Entire Grid">
-          <img src="Images/Clear.jpg" alt="Clear All" style="filter: hue-rotate(140deg);">
-        </button>
-        
+        <div class="action-row info-row">
+          <span id="selected-info">Tile: Empty</span>
+        </div>
+        <div class="action-row btn-row">
+          <button id="btn-rotate-ccw" class="action-btn" title="Rotate CCW (↺)">
+            <img src="Images/Rotate_ccw.jpg" alt="Rotate CCW">
+          </button>
+          <button id="btn-rotate-cw" class="action-btn" title="Rotate CW (↻)">
+            <img src="Images/Rotate_cw.jpg" alt="Rotate CW">
+          </button>
+          <button id="btn-delete" class="action-btn" title="Delete Block [Del]">
+            <img src="Images/Delete.jpg" alt="Delete">
+          </button>
+          <button id="btn-clear-path" class="action-btn" title="Clear Non-Directional Blocks">
+            <img src="Images/Clear.jpg" alt="Clear Path Blocks">
+          </button>
+          <button id="btn-clear" class="action-btn" title="Clear Entire Grid">
+            <img src="Images/Clear.jpg" alt="Clear All" style="filter: hue-rotate(140deg);">
+          </button>
+        </div>
+        <div class="action-row share-row">
+          <button id="btn-share" class="secondary share-btn" title="Copy shareable build link to clipboard">Share Build Link</button>
+        </div>
       </div>
     </section>
 
     <!-- RIGHT: STATS & CALCULATION -->
     <section class="results-panel">
-      <div >
-        <label for="maxTierInput">Max Tier Reached:</label>
-        <input type="number" id="maxTierInput" min="0" step="1" value="0" placeholder="e.g. 700"/>
-      </div>
       <div class="calc-header">
         <h3>Damage Analysis</h3>
-        <div class="calc-actions">
-          <button id="btn-share" class="secondary" title="Copy shareable build link to clipboard">Share</button>
-          <button id="btn-calc" class="primary">Calculate Damage</button>
+      </div>
+
+      <!-- INPUT CONFIG ROW 1 -->
+      <div class="config-grid-row">
+        <div class="input-field-group">
+          <label for="maxTierInput">Max Tier Reached:</label>
+          <input type="number" id="maxTierInput" min="0" step="1" value="0" placeholder="e.g. 700"/>
+        </div>
+        <div class="input-field-group">
+          <label for="fireRateInput">Fire Rate:</label>
+          <input type="number" id="fireRateInput" min="0.1" step="0.1" value="1.0" placeholder="e.g. 1.0"/>
         </div>
       </div>
 
-      <!-- TRIALS CONFIGURATION -->
+      <!-- TRIALS LOGARITHMIC CONFIG ROW 2 -->
       <div class="trials-config">
         <div class="trials-label-row">
           <label for="trials-input">Simulations:</label>
           <input type="number" id="trials-input" min="1" max="5000000" step="1" value="1000000">
         </div>
-        <input type="range" id="trials-slider" min="1" max="5000000" step="1" value="1000000">
+        <input type="range" id="trials-slider" min="0" max="1000" step="1" value="900">
+        
+        <!-- LOGARITHMIC AXIS LABELS -->
+        <div class="trials-ticks">
+          <span style="left: 0%;">1</span>
+          <span style="left: 16.5%;">10</span>
+          <span style="left: 30.7%;">100</span>
+          <span style="left: 45%;">1k</span>
+          <span style="left: 59.7%;">10k</span>
+          <span style="left: 73%;">100k</span>
+          <span style="left: 88%;">1M</span>
+          <span style="left: 100%;">5M</span>
+        </div>
+
+      <div class="calc-actions-row">
+        <button id="btn-calc" class="primary full-width-btn">Calculate Damage</button>
       </div>
 
       <!-- PROGRESS BAR -->
@@ -82,7 +103,7 @@
         <div class="card"><span>Average DPS: </span><strong id="kpi-ev">0 </strong></div>
         <div class="card"><span>Min/Max: </span><strong id="kpi-range">0 / 0 </strong></div>
       </div>
-      <div class="chart-container">
+      <div class="chart-container" >
         <canvas id="chart-canvas"></canvas>
       </div>
     </section>
