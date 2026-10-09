@@ -14,10 +14,9 @@ const PASSTHROUGH_BLOCKS = new Set([
   'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage',
   'Pierce', 'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align',
   'Line Magnet', 'Forward Magnet', 'Sideways', 'Money Cross', 'Endlife Damage',
-  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile', 
-  'Damage Cross', 'Max Tier Damage', 
-  'Turn Damage'
+  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile'
 ]);
+
 
 function normDir(dir) {
   return (dir % 360 + 360) % 360;
@@ -77,7 +76,9 @@ function tracePathOnly(shipGrid, gridSize) {
           nextQueue.push({ ...node, r: nextR, c: nextC, pathTrace: newTrace });
         } else {
           const requiredDir = normDir(targetTile.rotation);
-          if (node.dir === requiredDir) {
+          
+          // Allow Damage Cross (and passthrough/multi-entry blocks) to evaluate custom entry angles
+          if (targetTile.block === 'Damage Cross' || node.dir === requiredDir) {
             let processed = processModifierForTrace(targetTile, node, nextR, nextC, newTrace, traces);
             nextQueue.push(...processed);
           } else {
@@ -126,7 +127,31 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
     case 'Ejector Damage':
     case '4x Damage':
     case 'Accumulator':
+    case 'Max Tier Damage':
+    case 'Turn Damage':
       return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+    
+    case 'Damage Cross': {
+      const rot = normDir(tile.rotation);
+      const auxB = normDir(rot - 90);
+      const auxD = normDir(rot + 90);
+
+      // Auxiliary B entry -> exit D
+      if (node.dir === normDir(auxB + 180)) {
+        return [{ ...node, r, c, dir: auxD, pathTrace: trace }];
+      }
+      // Auxiliary D entry -> exit B
+      if (node.dir === normDir(auxD + 180)) {
+        return [{ ...node, r, c, dir: auxB, pathTrace: trace }];
+      }
+      // Main Entry A -> exit C
+      if (node.dir === rot) {
+        return [{ ...node, r, c, dir: rot, pathTrace: trace }];
+      }
+      // Invalid entry (e.g. entering through C)
+      traces.push(trace);
+      return [];
+    }
     
     case '+100 Damage':
       return [{ ...node, r, c, dir: rot, damage: node.damage + 100, pathTrace: trace }];
@@ -165,7 +190,7 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
  * Runs a single trial across a full multi-shot burst sequence.
  * Accepts `tileStates` map from outside to mutate state continuously across multiple trial runs.
  */
-function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burstCount = 0, burstDamageMult = 1.0, unusedDamageBonus = 0, ejectorUnusedCount=0) {
+function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burstCount = 0, burstDamageMult = 1.0, unusedDamageBonus = 0, ejectorUnusedCount=0, maxTier =0) {
   function getChargerState(r, c) {
     const key = `${r},${c}`;
     if (!tileStates.has(key)) {
@@ -190,6 +215,24 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
     return tileStates.get(key);
   }
 
+  function getDamageCrossState(r, c) {
+    const key = `dmgCross_${r},${c}`;
+    if (!tileStates.has(key)) {
+      tileStates.set(key, {
+        idCounter: 0,
+        records: new Map() // Maps localStamp -> storedDamage
+      });
+    }
+    return tileStates.get(key);
+  }
+  function cloneProj(proj, overrides = {}) {
+    return {
+      ...proj,
+      stamps: proj.stamps ? { ...proj.stamps } : {},
+      ...overrides
+    };
+  }
+
   let totalBurstDamage = 0;
   const totalShots = 1 + burstCount;
 
@@ -201,7 +244,9 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
       c: emitter.c,
       dir: emitter.dir,
       damage: shotBaseDamage,
-      isOriginal: true
+      isOriginal: true,
+      turnDamageActive: false, // Track "Turn Damage" modifier state per projectile
+      stamps: {} // Key: tileKey ("r,c"), Value: unique local ID string used for Damage Cross tracking
     }];
 
     let steps = 0;
@@ -232,17 +277,23 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
         }
 
         const requiredDir = normDir(tile.rotation);
-        if (proj.dir !== requiredDir) continue;
+        if (tile.block !== 'Damage Cross' && proj.dir !== requiredDir) continue;
 
         let currentDmg = proj.damage;
 
         switch (tile.block) {
-          case 'Turn Left':
-            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
+          case 'Turn Left':            
+            if (proj.turnDamageActive) {
+              currentDmg *= 1.10; // Apply 10% boost on subsequent turn blocks
+            }
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90), damage:currentDmg });
             break;
 
-          case 'Turn Right':
-            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
+          case 'Turn Right':        
+            if (proj.turnDamageActive) {
+              currentDmg *= 1.10; // Apply 10% boost on subsequent turn blocks
+            }
+            queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90), damage:currentDmg });
             break;
 
           case '+1 Damage':
@@ -301,6 +352,54 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             // Note: If count < 10, nothing is pushed to queue (projectile absorbed)
             break;
           }
+
+          case 'Max Tier Damage':
+            // Adds +10% of the player's max tier as flat damage
+            currentDmg += maxTier * 0.10;
+            queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
+            break;
+          
+          case 'Damage Cross': {
+            const rot = normDir(tile.rotation); // Facing direction = Main Exit C
+            const auxB = normDir(rot - 90);
+            const auxD = normDir(rot + 90);
+
+            const tileKey = `${nextR},${nextC}`;
+            const crossState = getDamageCrossState(nextR, nextC);
+
+            // Case 1: Main Entry (A) -> Collect recorded damage & exit Main Exit (C)
+            if (proj.dir === rot) {
+              const localStamp = proj.stamps ? proj.stamps[tileKey] : null;
+              if (localStamp && crossState.records.has(localStamp)) {
+                currentDmg += crossState.records.get(localStamp);
+              }
+              queue.push(cloneProj(proj, { r: nextR, c: nextC, damage: currentDmg }));
+            } 
+            // Case 2: Aux B Entry -> Always assign fresh stamp, record damage & exit Aux D
+            else if (proj.dir === normDir(auxB + 180)) {
+              crossState.idCounter++;
+              const newStamp = `DC_${tileKey}_${crossState.idCounter}`;
+              crossState.records.set(newStamp, currentDmg);
+
+              const updatedProj = cloneProj(proj, { r: nextR, c: nextC, dir: auxD, damage: currentDmg });
+              updatedProj.stamps[tileKey] = newStamp;
+              queue.push(updatedProj);
+            } 
+            // Case 3: Aux D Entry -> Always assign fresh stamp, record damage & exit Aux B
+            else if (proj.dir === normDir(auxD + 180)) {
+              crossState.idCounter++;
+              const newStamp = `DC_${tileKey}_${crossState.idCounter}`;
+              crossState.records.set(newStamp, currentDmg);
+
+              const updatedProj = cloneProj(proj, { r: nextR, c: nextC, dir: auxB, damage: currentDmg });
+              updatedProj.stamps[tileKey] = newStamp;
+              queue.push(updatedProj);
+            }
+            // Entry through Main Exit (C) is blocked (nothing pushed to queue)
+            break;
+          }
+
+
           case '33% x2 Damage':
             if (Math.random() < 0.33) currentDmg *= 2;
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
@@ -351,6 +450,11 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             currentDmg += ejectorUnusedCount * 10;
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
+          
+            case 'Turn Damage':
+            // Activates the +10% turn boost for this projectile moving forward
+            queue.push({ ...proj, r: nextR, c: nextC, turnDamageActive: true });
+            break;
 
           case 'Random Double': {
             currentDmg *= 2;
@@ -395,6 +499,7 @@ function calculateShip(
   baseDamage = 1, 
   baseFireRate = 1, 
   numSimulations = 100000, 
+  maxTier = 0,
   onProgress = null,
   config = {}
 ) {
@@ -475,7 +580,8 @@ function calculateShip(
         burstCount, 
         burstDamageMult,
         unusedDamageBonus,
-        ejectorUnusedCount
+        ejectorUnusedCount,
+        maxTier
       );
 
       const simDamage = Math.round(rawDamage);
