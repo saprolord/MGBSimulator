@@ -3,7 +3,7 @@ const GRID_SIZE = 12;
 const TILE_SIZE = 50;
 
 let shipGrid = Array(GRID_SIZE).fill(null).map(() => 
-  Array(GRID_SIZE).fill(null).map(() => ({ type: 'SPACE', block: null, rotation: 0 }))
+  Array(GRID_SIZE).fill(null).map(() => ({ type: 'Empty Slot', block: null, rotation: 0 }))
 );
 
 let selectedTile = { x: -1, y: -1 };
@@ -12,31 +12,31 @@ let currentCalculation = null;
 let chartInstance = null;
 
 // Directional blocks that should NOT be cleared by "Clear Path"
-const DIRECTIONAL_BLOCKS = new Set(['Turn Right', 'Turn Left', 'Dual Splitter','Triple Splitter','Random Double','Random Triple']);
+const DIRECTIONAL_BLOCKS = new Set(['Guide Right', 'Guide Left', '2-Way Split','3-way Split','2-Way Random Split','3-Way Random Split']);
 
 // Available Items
 const ITEM_PALETTE = [
-  'Turn Right', 'Turn Left', 'Dual Splitter',
-  'Triple Splitter', '+1 Damage', '+1 Projectile', '33% x2 Damage',
-  'Tenfold Damage', 'Gamble Damage', 'Charger', 'Damage Cross','Random Double', 'Random Triple', 'Max Tier Damage',
-  '4x Damage', 'Unused Damage', 'Accumulator', 'Turn Damage', '+100 Damage', 'Ejector Damage', 'Duplicate Projectile',
-  'More Speed', 'Less Speed', 'Eject Left', 'Eject Right', 'Eject Randomly', 'Eject Narrow', 'Curve Left', 'Curve Right',
-  'Curve Random', 'Bounce back', 'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage', 'Pierce', 
-  'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align', 'Line Magnet', 'Forward Magnet', 'Sideways',
-  'Money Cross', 'Endlife Damage', 'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile'
+  'Guide Right', 'Guide Left', '2-Way Split',
+  '3-way Split', 'Add 1 Damage', 'Add Projectile', 'x2 Damage',
+  'x10 Damage', 'Random Damage', 'Charge', 'Damage Cross','2-Way Random Split', '3-Way Random Split', 'Tier Damage',
+  'Damage Comeback', 'Damage Stockpile', 'Combine 10', 'Guided Damage', 'Add 100 Damage', 'Ejector Damage', 'Clone',
+  'Speed Up', 'Slow Down', 'Spread Left', 'Spread Right', 'Large Spread', 'Small Spread', 'Curve Left', 'Curve Right',
+  'Random Curve', 'Return Bounce', 'Random Bounce', 'Ricochet', 'Double Lifetime', 'Death Pierce', 'Pierce', 
+  'Circle AoE', 'Rectangle AoE', 'Magnet', 'Align Direction', 'Line Magnet', 'Shoot Upward', 'Sideways',
+  'Money Cross', 'Evolved Damage', 'Slow Burn', 'Crisscross', 'Sparse Damage'
 ];
 
 // Layout Setup
-shipGrid[10][5] = { type: 'EMITTER', block: null, rotation: 0 }; 
-shipGrid[1][5] = { type: 'EJECTOR', block: null, rotation: 0 }; 
+shipGrid[10][5] = { type: 'Projectile Generator', block: null, rotation: 0 }; 
+shipGrid[1][5] = { type: 'Ejection Block', block: null, rotation: 0 }; 
 for (let r = 0; r < GRID_SIZE; r++) {
-  shipGrid[r][0] = { type: 'WALL', block: null, rotation: 0 };
-  shipGrid[r][GRID_SIZE - 1] = { type: 'WALL', block: null, rotation: 0 };
-  shipGrid[r][GRID_SIZE - 2] = { type: 'WALL', block: null, rotation: 0 };
+  shipGrid[r][0] = { type: 'Solid Block', block: null, rotation: 0 };
+  shipGrid[r][GRID_SIZE - 1] = { type: 'Solid Block', block: null, rotation: 0 };
+  shipGrid[r][GRID_SIZE - 2] = { type: 'Solid Block', block: null, rotation: 0 };
 }
 for (let c = 0; c < GRID_SIZE; c++) {
-  shipGrid[0][c] = { type: 'WALL', block: null, rotation: 0 };
-  shipGrid[GRID_SIZE - 1][c] = { type: 'WALL', block: null, rotation: 0 };
+  shipGrid[0][c] = { type: 'Solid Block', block: null, rotation: 0 };
+  shipGrid[GRID_SIZE - 1][c] = { type: 'Solid Block', block: null, rotation: 0 };
 }
 
 // DOM Elements
@@ -62,62 +62,62 @@ const progressText = document.getElementById('progress-text');
 // --- IMAGE ASSET CONFIGURATION ---
 const BLOCK_IMAGES = {
   //Core blocks
-  'EMITTER':        'Images/Projectile_generator.webp',
-  'EJECTOR':        'Images/Ejection_block.webp',
-  'WALL':           'Images/Solid_block.webp',
-  'SPACE':          'Images/Empty_slot.webp',
+  'Projectile Generator':        'Images/Projectile_generator.webp',
+  'Ejection Block':        'Images/Ejection_block.webp',
+  'Solid Block':           'Images/Solid_block.webp',
+  'Empty Slot':          'Images/Empty_slot.webp',
   //Directional blocks
-  'Turn Right':     'Images/Right_turn.webp',
-  'Turn Left':      'Images/Left_turn.webp',
-  'Dual Splitter':  'Images/Split_sides.webp',
-  'Triple Splitter': 'Images/Split_all.webp',
+  'Guide Right':     'Images/Right_turn.webp',
+  'Guide Left':      'Images/Left_turn.webp',
+  '2-Way Split':  'Images/Split_sides.webp',
+  '3-way Split': 'Images/Split_all.webp',
   // Damage/projectile modifiers
-  '+1 Damage':      'Images/More_damage.webp',
-  '+1 Projectile':  'Images/Clone_bullet.webp',
-  '33% x2 Damage':  'Images/Double_damage.webp',
-  'Random Double':   'Images/Random_double.webp',
-  'Random Triple':   'Images/Random_triple.webp',
-  'Tenfold Damage':  'Images/Tenfold_damage.webp',
-  'Gamble Damage':  'Images/Gamble_damage.webp',
-  'Charger':          'Images/Damage_regulator.webp',
+  'Add 1 Damage':      'Images/More_damage.webp',
+  'Add Projectile':  'Images/Clone_bullet.webp',
+  'x2 Damage':  'Images/Double_damage.webp',
+  '2-Way Random Split':   'Images/Random_double.webp',
+  '3-Way Random Split':   'Images/Random_triple.webp',
+  'x10 Damage':  'Images/Tenfold_damage.webp',
+  'Random Damage':  'Images/Gamble_damage.webp',
+  'Charge':          'Images/Damage_regulator.webp',
   'Damage Cross':      'Images/Damage_loop.webp',
-  'Max Tier Damage':      'Images/Max_tier_damage.webp',
-  '4x Damage':      'Images/Double_size_and_damage.webp',
-  'Unused Damage':      'Images/Empty_tile_damage_boost.webp',
-  'Accumulator':      'Images/Accumulator.webp',
-  'Turn Damage':      'Images/Turn_damage.webp',
-  '+100 Damage':      'Images/Add_100_damage.webp',
+  'Tier Damage':      'Images/Max_tier_damage.webp',
+  'Damage Comeback':      'Images/Double_size_and_damage.webp',
+  'Damage Stockpile':      'Images/Empty_tile_damage_boost.webp',
+  'Combine 10':      'Images/Accumulator.webp',
+  'Guided Damage':      'Images/Turn_damage.webp',
+  'Add 100 Damage':      'Images/Add_100_damage.webp',
   'Ejector Damage':      'Images/10_damage_unused_ejector.webp',
-  'Duplicate Projectile':      'Images/Duplicate_bullet.webp',
+  'Clone':      'Images/Duplicate_bullet.webp',
 
   // Unconsequntial modifiers for completness and ship copy/paste functionality
-  'More Speed':      'Images/More_speed.webp',
-  'Less Speed':      'Images/Less_speed.webp',
-  'Eject Left':      'Images/Eject_to_the_left.webp',
-  'Eject Right':     'Images/Eject_to_the_right.webp',
-  'Eject Randomly':  'Images/Eject_randomly.webp',
-  'Eject Narrow':    'Images/Eject_narrow.webp',
+  'Speed Up':      'Images/More_speed.webp',
+  'Slow Down':      'Images/Less_speed.webp',
+  'Spread Left':      'Images/Eject_to_the_left.webp',
+  'Spread Right':     'Images/Eject_to_the_right.webp',
+  'Large Spread':  'Images/Eject_randomly.webp',
+  'Small Spread':    'Images/Eject_narrow.webp',
   'Curve Left':       'Images/Curve_left.webp',
   'Curve Right':      'Images/Curve_right.webp',
-  'Curve Random':     'Images/Curve_randomly.webp',
-  'Bounce back':      'Images/Bounce_back.webp',
-  'Bounce randomly':   'Images/Bounce_randomly.webp',
+  'Random Curve':     'Images/Curve_randomly.webp',
+  'Return Bounce':      'Images/Bounce_back.webp',
+  'Random Bounce':   'Images/Bounce_randomly.webp',
   'Ricochet':          'Images/Realistic_bounce.webp',
   'Double Lifetime':   'Images/More_projectile_lifetime.webp',
-  'Persistent Damage': 'Images/Persistent_damage.webp',
+  'Death Pierce': 'Images/Persistent_damage.webp',
   'Pierce':            'Images/Pierce.webp',
-  'AOE Radius':        'Images/Aoe.webp',
-  'AOE Square':        'Images/Square_aoe.webp',
-  'Projectile Magnet': 'Images/Bullet_magnet.webp',
-  'Projectile Align':  'Images/Bullet_align.webp',
+  'Circle AoE':        'Images/Aoe.webp',
+  'Rectangle AoE':        'Images/Square_aoe.webp',
+  'Magnet': 'Images/Bullet_magnet.webp',
+  'Align Direction':  'Images/Bullet_align.webp',
   'Line Magnet':       'Images/Ship_line_bullet_magnet.webp',
-  'Forward Magnet':    'Images/Forward.webp',
+  'Shoot Upward':    'Images/Forward.webp',
   'Sideways':        'Images/Sideways.webp',
   'Money Cross':        'Images/Money_loop.webp',
-  'Endlife Damage':        'Images/More_damage_at_end_of_lifetime.webp',
-  'Slow Damage':        'Images/Speed_damage_boost.webp',
-  'Zigzag Projectile':        'Images/Zigzag_bullet.webp',
-  'Double Less Projectile':      'Images/Double_damage_10_bullet_screen.webp'
+  'Evolved Damage':        'Images/More_damage_at_end_of_lifetime.webp',
+  'Slow Burn':        'Images/Speed_damage_boost.webp',
+  'Crisscross':        'Images/Zigzag_bullet.webp',
+  'Sparse Damage':      'Images/Double_damage_10_bullet_screen.webp'
 
 }
 
@@ -220,8 +220,8 @@ function drawGrid() {
       if (baseImg && baseImg.complete) {
         ctx.drawImage(baseImg, x, y, TILE_SIZE, TILE_SIZE);
       } else {
-        ctx.fillStyle = tile.type === 'EMITTER' ? '#1e3a1e' : 
-                        tile.type === 'EJECTOR' ? '#3a1e1e' : '#222222';
+        ctx.fillStyle = tile.type === 'Projectile Generator' ? '#1e3a1e' : 
+                        tile.type === 'Ejection Block' ? '#3a1e1e' : '#222222';
         ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
       }
 
@@ -302,7 +302,7 @@ function drawPathTraces(traces) {
 
       if (isLast) {
         const targetTile = shipGrid[currCell.r][currCell.c];
-        if (targetTile.type === 'WALL' || (targetTile.type === 'SPACE' && targetTile.block)) {
+        if (targetTile.type === 'Solid Block' || (targetTile.type === 'Empty Slot' && targetTile.block)) {
           let dc = currCell.c - prevCell.c;
           let dr = currCell.r - prevCell.r;
 
@@ -360,7 +360,7 @@ function updatePathAndGrid() {
 function deleteSelectedTile() {
   if (selectedTile.x !== -1) {
     const tile = shipGrid[selectedTile.y][selectedTile.x];
-    if (tile.type === 'SPACE' && tile.block) {
+    if (tile.type === 'Empty Slot' && tile.block) {
       tile.block = null;
       tile.rotation = 0;
       updatePathAndGrid();
@@ -393,7 +393,7 @@ canvas.addEventListener('click', (e) => {
     selectedTile = { x: c, y: r };
     const tile = shipGrid[r][c];
 
-    if (tile.type === 'SPACE' && selectedPaletteBlock) {
+    if (tile.type === 'Empty Slot' && selectedPaletteBlock) {
       tile.block = selectedPaletteBlock;
 
       const incomingDir = getIncomingDirectionAt(r, c);
@@ -454,7 +454,7 @@ btnClearPath.addEventListener('click', () => {
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
         const tile = shipGrid[r][c];
-        if (tile.type === 'SPACE' && tile.block && !DIRECTIONAL_BLOCKS.has(tile.block)) {
+        if (tile.type === 'Empty Slot' && tile.block && !DIRECTIONAL_BLOCKS.has(tile.block)) {
           tile.block = null;
           tile.rotation = 0;
         }
@@ -469,7 +469,7 @@ btnClear.addEventListener('click', () => {
   if (confirm('Are you sure you want to clear all blocks?')) {
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
-        if (shipGrid[r][c].type === 'SPACE') {
+        if (shipGrid[r][c].type === 'Empty Slot') {
           shipGrid[r][c].block = null;
           shipGrid[r][c].rotation = 0;
         }
@@ -626,54 +626,54 @@ function updateChart(calcResult) {
 // - R:  1-digit hex rotation (0=0°, 1=90°, 2=180°, 3=270°)
 // No delimiters needed because each block is strictly 5 characters long.
 const BLOCK_CATALOG = [
-  'Turn Right',     // 00
-  'Turn Left',      // 01
-  'Dual Splitter',  // 02
+  'Guide Right',     // 00
+  'Guide Left',      // 01
+  '2-Way Split',  // 02
   '+1 Damage',      // 03
-  '+1 Projectile',  // 04
-  '33% x2 Damage',   // 05
-  'Triple Splitter', // 06
-  'Random Double',   // 07
-  'Random Triple',   // 08
-  'Tenfold Damage',  // 09
-  'Gamble Damage',   // 0A
-  '+100 Damage' ,    // 0B
-  'Duplicate Projectile', // 0C
-  'Charger',         // 0D
-  'Unused Damage',   // 0E
+  'Add Projectile',  // 04
+  'x2 Damage',   // 05
+  '3-way Split', // 06
+  '2-Way Random Split',   // 07
+  '3-Way Random Split',   // 08
+  'x10 Damage',  // 09
+  'Random Damage',   // 0A
+  'Add 100 Damage' ,    // 0B
+  'Clone', // 0C
+  'Charge',         // 0D
+  'Damage Stockpile',   // 0E
   'Ejector Damage',  // 0F
-  'Accumulator',     // 10
-  '4X Damage' ,      // 11  
-  'Max Tier Damage', // 12
-  'Turn Damage',     // 13
+  'Combine 10',     // 10
+  'Damage Comeback' ,      // 11  
+  'Tier Damage', // 12
+  'Guided Damage',     // 13
   'Damage Cross',    // 14
-  'More Speed',     // 15
-  'Less Speed',     // 16
-  'Eject Left',     // 17
-  'Eject Right',    // 18
-  'Eject Randomly', // 19
-  'Eject Narrow',   // 1A
+  'Speed Up',     // 15
+  'Slow Down',     // 16
+  'Spread Left',     // 17
+  'Spread Right',    // 18
+  'Large Spread', // 19
+  'Small Spread',   // 1A
   'Curve Left',     // 1B
   'Curve Right',    // 1C
-  'Curve Random',   // 1D
-  'Bounce back',    // 1E
-  'Bounce randomly', // 1F
+  'Random Curve',   // 1D
+  'Return Bounce',    // 1E
+  'Random Bounce', // 1F
   'Ricochet',       // 20
   'Double Lifetime',  // 21
-  'Persistent Damage', // 22   
+  'Death Pierce', // 22   
   'Pierce',           // 23
-  'AOE Radius',       // 24
-  'AOE Square',     // 25
-  'Projectile Magnet',  // 26
-  'Projectile Align',   // 27
+  'Circle AoE',       // 24
+  'Rectangle AoE',     // 25
+  'Magnet',  // 26
+  'Align Direction',   // 27
   'Line Magnet',      // 28
-  'Forward Magnet',   // 29
+  'Shoot Upward',   // 29
   'Sideways',         // 2A
   'Money Cross',      // 2B
-  'Endlife Damage',   // 2C
-  'Slow Damage',    // 2D
-  'Zigzag Projectile',    // 2E
-  'Double Less Projectile'  // 2F
+  'Evolved Damage',   // 2C
+  'Slow Burn',    // 2D
+  'Crisscross',    // 2E
+  'Sparse Damage'  // 2F
   // Additional blocks (up to 64) can be appended here
 ];
 
@@ -692,7 +692,7 @@ function serializeLayout() {
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       const tile = shipGrid[r][c];
-      if (tile.type === 'SPACE' && tile.block) {
+      if (tile.type === 'Empty Slot' && tile.block) {
         const blockIdx = BLOCK_CATALOG.indexOf(tile.block);
         if (blockIdx !== -1) {
           const tileIdx = r * GRID_SIZE + c;
@@ -719,7 +719,7 @@ function deserializeLayout(encodedStr) {
   // Clear existing placed blocks
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      if (shipGrid[r][c].type === 'SPACE') {
+      if (shipGrid[r][c].type === 'Empty Slot') {
         shipGrid[r][c].block = null;
         shipGrid[r][c].rotation = 0;
       }
@@ -737,7 +737,7 @@ function deserializeLayout(encodedStr) {
     if (blockName && !isNaN(tileIdx)) {
       const r = Math.floor(tileIdx / GRID_SIZE);
       const c = tileIdx % GRID_SIZE;
-      if (shipGrid[r] && shipGrid[r][c] && shipGrid[r][c].type === 'SPACE') {
+      if (shipGrid[r] && shipGrid[r][c] && shipGrid[r][c].type === 'Empty Slot') {
         shipGrid[r][c].block = blockName;
         shipGrid[r][c].rotation = normDir(rot);
         count++;

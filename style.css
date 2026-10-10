@@ -412,7 +412,7 @@ canvas#chart-canvas {
   }
 
   .app-container {
-    grid-template-columns: minmax(55px, 20%) 1fr;
+    grid-template-columns: minmax(40px, 15%) 1fr;
     grid-template-areas:
       "palette canvas"
       "results results";
@@ -455,6 +455,22 @@ canvas#chart-canvas {
 
   .palette-btn.unimplemented:hover img {
     filter: grayscale(0%) opacity(0.8);
+  }
+  
+  .palette-btn {
+    width: 30px;       
+    height: 30px;      
+    flex-shrink: 0;    
+    background-color: #2b2b2b;
+    color: #ffffff;
+    border: 2px solid #444444;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
 }
 
