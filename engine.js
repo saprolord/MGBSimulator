@@ -9,12 +9,12 @@ const DIR_VECTORS = {
 
 // Blocks that pass projectiles straight through without altering direction or damage
 const PASSTHROUGH_BLOCKS = new Set([
-  'More Speed', 'Less Speed', 'Eject Left', 'Eject Right', 'Eject Randomly',
-  'Eject Narrow', 'Curve Left', 'Curve Right', 'Curve Random', 'Bounce back',
-  'Bounce randomly', 'Ricochet', 'Double Lifetime', 'Persistent Damage',
-  'Pierce', 'AOE Radius', 'AOE Square', 'Projectile Magnet', 'Projectile Align',
-  'Line Magnet', 'Forward Magnet', 'Sideways', 'Money Cross', 'Endlife Damage',
-  'Slow Damage', 'Zigzag Projectile', 'Double Less Projectile'
+  'Speed Up', 'Slow Down', 'Spread Left', 'Spread Right', 'Large Spread',
+  'Small Spread', 'Curve Left', 'Curve Right', 'Random Curve', 'Return Bounce',
+  'Random Bounce', 'Ricochet', 'Double Lifetime', 'Death Pierce',
+  'Pierce', 'Circle AoE', 'Rectangle AoE', 'Magnet', 'Align Direction',
+  'Line Magnet', 'Shoot Upward', 'Sideways', 'Money Cross', 'Evolved Damage',
+  'Slow Burn', 'Crisscross', 'Sparse Damage'
 ]);
 
 
@@ -27,7 +27,7 @@ function tracePathOnly(shipGrid, gridSize) {
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
-      if (shipGrid[r][c].type === 'EMITTER') {
+      if (shipGrid[r][c].type === 'Projectile Generator') {
         emitter = { r, c, dir: normDir(shipGrid[r][c].rotation) };
         break;
       }
@@ -66,12 +66,12 @@ function tracePathOnly(shipGrid, gridSize) {
       const targetTile = shipGrid[nextR][nextC];
       let newTrace = [...node.pathTrace, { r: nextR, c: nextC }];
 
-      if (targetTile.type === 'WALL' || targetTile.type === 'EJECTOR') {
+      if (targetTile.type === 'Solid Block' || targetTile.type === 'Ejection Block') {
         traces.push(newTrace);
         continue;
       }
 
-      if (targetTile.type === 'SPACE') {
+      if (targetTile.type === 'Empty Slot') {
         if (!targetTile.block) {
           nextQueue.push({ ...node, r: nextR, c: nextC, pathTrace: newTrace });
         } else {
@@ -98,37 +98,37 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
   const isOrig = node.isOriginal ?? true;
 
   switch (tile.block) {
-    case 'Turn Left':
+    case 'Guide Left':
       return [{ ...node, r, c, dir: normDir(rot - 90), pathTrace: trace }];
-    case 'Turn Right':
+    case 'Guide Right':
       return [{ ...node, r, c, dir: normDir(rot + 90), pathTrace: trace }];
-    case '+1 Damage':
+    case 'Add 1 Damage':
       return [{ ...node, r, c, dir: rot, damage: node.damage + 1, pathTrace: trace }];
-    case '+1 Projectile': {
+    case 'Add Projectile': {
       let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
       if (isOrig) projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
       return projList;
     }
-    case 'Duplicate Projectile': {
+    case 'Clone': {
       let projList = [{ ...node, r, c, dir: rot, pathTrace: [...trace] }];
       projList.push({ ...node, r, c, dir: rot, pathTrace: [...trace], isOriginal: false });
       return projList;
     }
-    case 'Dual Splitter':
+    case '2-Way Split':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
       ];
-    case '33% x2 Damage':
-    case 'Tenfold Damage':
-    case 'Gamble Damage':
-    case 'Charger':
-    case 'Unused Damage':
+    case 'x2 Damage':
+    case 'x10 Damage':
+    case 'Random Damage':
+    case 'Charge':
+    case 'Damage Stockpile':
     case 'Ejector Damage':
-    case '4x Damage':
-    case 'Accumulator':
-    case 'Max Tier Damage':
-    case 'Turn Damage':
+    case 'Damage Comeback':
+    case 'Combine 10':
+    case 'Tier Damage':
+    case 'Guided Damage':
       return [{ ...node, r, c, dir: rot, pathTrace: trace }];
     
     case 'Damage Cross': {
@@ -153,21 +153,21 @@ function processModifierForTrace(tile, node, r, c, trace, traces) {
       return [];
     }
     
-    case '+100 Damage':
+    case 'Add 100 Damage':
       return [{ ...node, r, c, dir: rot, damage: node.damage + 100, pathTrace: trace }];
 
-    case 'Triple Splitter':
+    case '3-way Split':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
       ];
-    case 'Random Double':
+    case '2-Way Random Split':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot + 90), pathTrace: [...trace] }
       ];
-    case 'Random Triple':
+    case '3-Way Random Split':
       return [
         { ...node, r, c, dir: normDir(rot - 90), pathTrace: [...trace] },
         { ...node, r, c, dir: normDir(rot), pathTrace: [...trace] },
@@ -263,14 +263,14 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
 
       const tile = shipGrid[nextR][nextC];
 
-      if (tile.type === 'WALL') continue;
+      if (tile.type === 'Solid Block') continue;
 
-      if (tile.type === 'EJECTOR') {
+      if (tile.type === 'Ejection Block') {
         totalBurstDamage += proj.damage* (1 + unusedDamageBonus);
         continue;
       }
 
-      if (tile.type === 'SPACE') {
+      if (tile.type === 'Empty Slot') {
         if (!tile.block) {
           queue.push({ ...proj, r: nextR, c: nextC });
           continue;
@@ -282,33 +282,33 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
         let currentDmg = proj.damage;
 
         switch (tile.block) {
-          case 'Turn Left':            
+          case 'Guide Left':            
             if (proj.turnDamageActive) {
               currentDmg *= 1.10; // Apply 10% boost on subsequent turn blocks
             }
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90), damage:currentDmg });
             break;
 
-          case 'Turn Right':        
+          case 'Guide Right':        
             if (proj.turnDamageActive) {
               currentDmg *= 1.10; // Apply 10% boost on subsequent turn blocks
             }
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90), damage:currentDmg });
             break;
 
-          case '+1 Damage':
+          case 'Add 1 Damage':
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg + 1 });
             break;
 
-          case '+100 Damage':
+          case 'Add 100 Damage':
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg + 100 });
             break;
 
-          case 'Unused Damage':
+          case 'Damage Stockpile':
             queue.push({ ...proj, r: nextR, c: nextC });
             break;
 
-          case 'Charger': {
+          case 'Charge': {
             const state = getChargerState(nextR, nextC);
             // 1. Gain 10% of stored charge as bonus damage
             currentDmg += state.charge * 0.10;
@@ -319,7 +319,7 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
           }
-          case '4x Damage': {
+          case 'Damage Comeback': {
             const state = get4xState(nextR, nextC);
 
             // Increase damage by x4 if current damage < previous projectile's damage
@@ -333,7 +333,7 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
           }
-          case 'Accumulator': {
+          case 'Combine 10': {
             const state = getAccumulatorState(nextR, nextC);
             state.count++;
             state.accumulatedDamage += currentDmg;
@@ -353,7 +353,7 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             break;
           }
 
-          case 'Max Tier Damage':
+          case 'Tier Damage':
             // Adds +10% of the player's max tier as flat damage
             currentDmg += maxTier * 0.10;
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
@@ -400,17 +400,17 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
           }
 
 
-          case '33% x2 Damage':
+          case 'x2 Damage':
             if (Math.random() < 0.33) currentDmg *= 2;
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
 
-          case 'Tenfold Damage':
+          case 'x10 Damage':
             if (Math.random() < 0.04) currentDmg *= 10;
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
 
-          case 'Gamble Damage': {
+          case 'Random Damage': {
             const roll = Math.random() * 13;
             if (roll < 1) currentDmg *= 0;
             else if (roll < 10) currentDmg *= 1;
@@ -422,24 +422,24 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             break;
           }
 
-          case '+1 Projectile':
+          case 'Add Projectile':
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             if (proj.isOriginal) {
               queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg, isOriginal: false });
             }
             break;
 
-          case 'Duplicate Projectile':
+          case 'Clone':
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg, isOriginal: false });
             break;
 
-          case 'Dual Splitter':
+          case '2-Way Split':
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
             break;
 
-          case 'Triple Splitter':
+          case '3-way Split':
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir - 90) });
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir) });
             queue.push({ ...proj, r: nextR, c: nextC, dir: normDir(requiredDir + 90) });
@@ -451,19 +451,19 @@ function runBurstTrial(shipGrid, gridSize, emitter, baseDamage, tileStates, burs
             queue.push({ ...proj, r: nextR, c: nextC, damage: currentDmg });
             break;
           
-            case 'Turn Damage':
+            case 'Guided Damage':
             // Activates the +10% turn boost for this projectile moving forward
             queue.push({ ...proj, r: nextR, c: nextC, turnDamageActive: true });
             break;
 
-          case 'Random Double': {
+          case '2-Way Random Split': {
             currentDmg *= 2;
             const chosenDir = Math.random() < 0.5 ? normDir(requiredDir - 90) : normDir(requiredDir + 90);
             queue.push({ ...proj, r: nextR, c: nextC, dir: chosenDir, damage: currentDmg });
             break;
           }
 
-          case 'Random Triple': {
+          case '3-Way Random Split': {
             currentDmg *= 3;
             const rand = Math.random();
             let chosenDir = normDir(requiredDir);
@@ -504,7 +504,7 @@ function calculateShip(
   let emitter = null;
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
-      if (shipGrid[r][c].type === 'EMITTER') {
+      if (shipGrid[r][c].type === 'Projectile Generator') {
         emitter = { r, c, dir: normDir(shipGrid[r][c].rotation) };
         break;
       }
@@ -521,7 +521,7 @@ function calculateShip(
   const ejectorPositions = [];
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
-      if (shipGrid[r][c].type === 'EJECTOR') {
+      if (shipGrid[r][c].type === 'Ejection Block') {
         ejectorPositions.push(`${r},${c}`);
       }
     }
@@ -531,7 +531,7 @@ function calculateShip(
   const hitEjectors = new Set();
   pathResult.traces.forEach(trace => {
     const lastPoint = trace[trace.length - 1];
-    if (lastPoint && shipGrid[lastPoint.r][lastPoint.c].type === 'EJECTOR') {
+    if (lastPoint && shipGrid[lastPoint.r][lastPoint.c].type === 'Ejection Block') {
       hitEjectors.add(`${lastPoint.r},${lastPoint.c}`);
     }
   });
@@ -544,10 +544,10 @@ function calculateShip(
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
       const tile = shipGrid[r][c];
-      if (tile.type === 'SPACE') {
+      if (tile.type === 'Empty Slot') {
         if (!tile.block) {
           emptySpaceCount++;
-        } else if (tile.block === 'Unused Damage') {
+        } else if (tile.block === 'Damage Stockpile') {
           hasUnusedDamageBlock = true;
         }
       }
