@@ -197,7 +197,7 @@ function deselectPaletteBlock() {
 
 function updatePaletteHighlight() {
   document.querySelectorAll('.palette-btn').forEach(b => {
-    if (b.title === selectedPaletteBlock) {
+    if (selectedPaletteBlock && b.title.startsWith(selectedPaletteBlock)) {
       b.classList.add('active');
     } else {
       b.classList.remove('active');
@@ -454,7 +454,7 @@ btnClearPath.addEventListener('click', () => {
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
         const tile = shipGrid[r][c];
-        if (tile.type === 'Empty Slot' && tile.block && !DIRECTIONAL_BLOCKS.has(tile.block)) {
+        if (tile.type === 'Empty Slot' && !DIRECTIONAL_BLOCKS.has(tile.block)) {
           tile.block = null;
           tile.rotation = 0;
         }

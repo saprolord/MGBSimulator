@@ -185,11 +185,30 @@ canvas#ship-canvas {
   background-color: #00c3ff81;
 }
 
+
+/* Palette item buttons styling for unimplemented blocks */
+.palette-btn.unimplemented img {
+  filter: grayscale(40%) opacity(0.45);
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+/* Hover feedback */
+.palette-btn.unimplemented:hover img {
+  filter: grayscale(0%) opacity(0.8);
+}
+
+/* Selected active state (green highlight container) */
 .palette-btn.active,
 .palette-btn.unimplemented.active {
   border: 2px solid #4caf50 !important;
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.6) !important;
   background-color: #1e3a1e !important;
+  filter: none !important;
+}
+
+/* Restore image visibility inside selected/active unimplemented button */
+.palette-btn.unimplemented.active img {
+  filter: grayscale(0%) opacity(0.7) !important;
 }
 
 .results-panel {
@@ -405,6 +424,30 @@ canvas#chart-canvas {
   font-weight: bold;
 }
 
+/* Toast Notification */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(40px);
+  background: #007acc;
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 1000;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media screen and (max-width: 850px) {
   html, body {
     overflow: auto;
@@ -447,16 +490,6 @@ canvas#chart-canvas {
     height: auto;
   }
 
-  /* Palette style for unimplemented / passthrough blocks */
-  .palette-btn.unimplemented img {
-    filter: grayscale(40%) opacity(0.5);
-    transition: filter 0.2s ease;
-  }
-
-  .palette-btn.unimplemented:hover img {
-    filter: grayscale(0%) opacity(0.8);
-  }
-  
   .palette-btn {
     width: 30px;       
     height: 30px;      
@@ -472,39 +505,4 @@ canvas#chart-canvas {
     padding: 2px;
     transition: border-color 0.15s ease, background-color 0.15s ease;
   }
-}
-
-/* Palette item buttons styling for unimplemeted blocks */
-.palette-btn.unimplemented img {
-  filter: grayscale(40%) opacity(0.45);
-  transition: filter 0.2s ease, opacity 0.2s ease;
-}
-
-/* Hover feedback */
-.palette-btn.unimplemented:hover img {
-  filter: grayscale(0%) opacity(0.8);
-}
-
-/* Toast Notification */
-.toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(40px);
-  background: #007acc;
-  color: #fff;
-  padding: 8px 18px;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 1000;
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
 }
