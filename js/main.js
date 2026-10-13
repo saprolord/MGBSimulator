@@ -14,7 +14,7 @@ import { TILE } from './config.js';
 import { isDirectionalBlock } from './blocks.js';
 import { headingBetween, toDegrees } from './headings.js';
 import { DEFAULT_SHIP_ID } from './ships.js';
-import { clearBlocks, hasBlock, removeBlock, collectPlacements, applyPlacements, replaceGrid } from './model/grid.js';
+import { clearBlocks, hasBlock, removeBlock, collectPlacements, applyPlacements, replaceGrid, canPlaceBlock } from  './model/grid.js';
 import { AVAILABLE_SHIPS, SHIP_PROBLEMS, createGridForShip, hasShip } from './model/ship-loader.js';
 import { buildHash, parseHash, parseLayout, serializeLayout } from './model/share-code.js';
 import { traceGrid } from './engine/index.js';
@@ -116,6 +116,10 @@ function incomingRotation(r, c) {
 function placeSelectedBlock(r, c) {
   const tile = grid[r][c];
   if (tile.type !== TILE.EMPTY || !palette.selected) return;
+  if (tile.block !== palette.selected && !canPlaceBlock(grid, palette.selected)) {
+    toast(`Only one "${palette.selected}" is allowed per ship. Delete the existing one first.`);
+    return;
+  }
   tile.block = palette.selected;
   // Face the way projectiles already travel through this tile (if any do).
   const rotation = incomingRotation(r, c);

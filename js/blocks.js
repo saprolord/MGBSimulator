@@ -16,6 +16,8 @@
  *   shareId         Permanent number used in share links (0-255).
  *   directional     true => kept by the "Clear Path" button.
  *   implemented     false => drawn greyed-out in the UI ("visual only").
+ *   maxPerShip      (optional) most copies allowed on one ship. Enforced when placing / loading.
+ *   portal          (optional) 'in' | 'out'. Marks the teleporter pair (see engine/ship.js).
  *   acceptsAnyEntry false => projectiles are only accepted when travelling in the block's facing
  *                   direction; anything else stops. (Only Damage Cross is more permissive.)
  *   route(v, out)   WHERE does the projectile go? Called by BOTH the path preview and the
@@ -32,10 +34,14 @@
  *   v.original    1 if this is the "original" projectile (not made by Add Projectile / Clone)
  *   v.turnActive  1 once the projectile passed a Guided Damage block
  *   v.stamps      Damage Cross bookkeeping (see below)
+ *   v.ship        the compiled ship (engine/ship.js), e.g. v.ship.portalOut
+
  *
  * THE `out` OBJECT - how a block releases projectiles
  *   out.emit(heading)         projectile continues (keeps its "original" status)
  *   out.emitCopy(heading)     projectile continues as a non-original copy
+ *   out.emitAt(cell, heading) teleport: release the projectile from another tile
+
  *   out.emitOneOf(a, b[, c])  simulation: pick ONE heading at random; path preview: show them all
  *
  * THE `sim` OBJECT - simulation state (see engine/trial.js)
@@ -61,6 +67,7 @@ const COMBINE_COUNT = 10; // Combine 10: releases every 10th projectile...
 const COMBINE_MULTIPLIER = 2; // ...with the sum of all 10, doubled
 const X2_CHANCE = 0.33;
 const X10_CHANCE = 0.04;
+const FACTION_CHANCE = 0.45 ;
 /** Random Damage: [cumulative weight, multiplier]. Weights are out of 13. */
 const RANDOM_DAMAGE_TABLE = [
   [1, 0],
@@ -177,7 +184,7 @@ export const BLOCKS = Object.freeze([
      *  - Entering from behind (the main entry): the recorded damage of the projectile's ticket
      *    is ADDED to it; it leaves straight on.
      */
-    name: 'Damage Cross', shareId: 0x14, image: 'Damage_loop.webp', acceptsAnyEntry: true,
+    name: 'Damage Cross', shareId: 0x14, image: 'Damage_loop.webp', directional: true, acceptsAnyEntry: true,
     effect: (v, sim) => {
       if (v.heading === v.rot) {
         const ticket = v.stamps !== null ? v.stamps[v.cell] : undefined;
@@ -206,13 +213,13 @@ export const BLOCKS = Object.freeze([
     route: (v, out) => out.emitOneOf(left(v.rot), v.rot, right(v.rot)),
   }),
   define({
-    name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp',
+    name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp', maxPerShip: 1,
     effect: (v, sim) => v.damage + sim.maxTier * TIER_DAMAGE_RATE,
     route: forward,
   }),
   define({
     // x4 damage when this projectile carries less than the previous one that passed through.
-    name: 'Damage Comeback', shareId: 0x11, image: 'Double_size_and_damage.webp',
+    name: 'Damage Comeback', shareId: 0x11, image: 'Double_size_and_damage.webp', maxPerShip: 1,
     effect: (v, sim) => {
       const previous = sim.lastDamage[v.cell]; // -1 = nothing has passed yet
       sim.lastDamage[v.cell] = v.damage;
@@ -222,12 +229,12 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     // Pure marker: its effect (+10 % per empty tile) is applied globally at the ejector.
-    name: 'Damage Stockpile', shareId: 0x0e, image: 'Empty_tile_damage_boost.webp',
+    name: 'Damage Stockpile', shareId: 0x0e, image: 'Empty_tile_damage_boost.webp', maxPerShip: 1,
     route: forward,
   }),
   define({
     // Swallows projectiles; every 10th one leaves carrying the doubled sum of the last 10.
-    name: 'Combine 10', shareId: 0x10, image: 'Accumulator.webp',
+    name: 'Combine 10', shareId: 0x10, image: 'Accumulator.webp', maxPerShip: 1,
     effect: (v, sim) => {
       const i = v.cell;
       sim.accCount[i]++;
@@ -242,7 +249,7 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     // After this block every turn block boosts the projectile (see guidedBoost).
-    name: 'Guided Damage', shareId: 0x13, image: 'Turn_damage.webp',
+    name: 'Guided Damage', shareId: 0x13, image: 'Turn_damage.webp', maxPerShip: 1,
     effect: (v) => {
       v.turnActive = 1;
       return v.damage;
@@ -250,21 +257,51 @@ export const BLOCKS = Object.freeze([
     route: forward,
   }),
   define({
-    name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp',
+    name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp', maxPerShip: 1,
     effect: addDamage(100),
     route: forward,
   }),
   define({
-    name: 'Ejector Damage', shareId: 0x0f, image: '10_damage_unused_ejector.webp',
+    name: 'Ejector Damage', shareId: 0x0f, image: '10_damage_unused_ejector.webp', maxPerShip: 1,
     effect: (v, sim) => v.damage + sim.unusedEjectors * EJECTOR_DAMAGE_EACH,
     route: forward,
   }),
   define({
-    name: 'Clone', shareId: 0x0c, image: 'Duplicate_bullet.webp',
+    name: 'Clone', shareId: 0x0c, image: 'Duplicate_bullet.webp', maxPerShip: 1,
     route: (v, out) => {
       out.emit(v.heading);
       out.emitCopy(v.heading);
     },
+  }),
+  define({
+    name: 'Thermite Round', shareId: 0x30, image: 'Thermite Round.jpg',
+    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    route: forward,
+  }),
+  define({
+    name: 'Charged Round', shareId: 0x31, image: 'Charged Round.jpg',
+    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    route: forward,
+  }),
+  define({
+    name: 'Plutonium Round', shareId: 0x32, image: 'Plutonium Round.jpg',
+    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    route: forward,
+  }),
+  define({
+    // A projectile entering from the front does not continue: it reappears at the output portal.
+    // With no output portal on the ship it simply ends here.
+    name: 'Input Portal', shareId: 0x33, image: 'Input Portal.jpg', directional: true, maxPerShip: 1, portal: 'in',
+    route: (v, out) => {
+      const exit = v.ship.portalOut;
+      if (exit !== null) out.emitAt(exit.cell, opposite(exit.heading));
+    },
+  }),
+  define({
+    // Only the exit of the teleporter: it leaves through the side that normally receives
+    // projectiles (the back). Projectiles that run into it directly are swallowed.
+    name: 'Output Portal', shareId: 0x34, image: 'Output Portal.jpg',directional: true, maxPerShip: 1, portal: 'out',
+    route: () => {},
   }),
 
   // ---- Visual-only blocks (kept for completeness and for copy/pasting ships) -------------
@@ -295,6 +332,16 @@ export const BLOCKS = Object.freeze([
   visualOnly('Slow Burn', 0x2d, 'Speed_damage_boost.webp'),
   visualOnly('Crisscross', 0x2e, 'Zigzag_bullet.webp'),
   visualOnly('Sparse Damage', 0x2f, 'Double_damage_10_bullet_screen.webp'),
+  visualOnly('Armor Piercing', 0x35, 'Armor Piercing.jpg'),
+  visualOnly('Energy Siphon', 0x36, 'Energy Siphon.jpg'),
+  visualOnly('Incendiary', 0x37, 'Incendary.jpg'),
+  visualOnly('Shield Piercing', 0x38, 'Shield Piercing.jpg'),
+  visualOnly('Energy Disrupt', 0x39, 'Energy Disrupt.jpg'),
+  visualOnly('Protonic', 0x3a, 'Protonic.jpg'),
+  visualOnly('Void Resistance', 0x3b, 'Void Resistance.jpg'),
+  visualOnly('Double Piercing', 0x3c, 'Double Piercing.jpg'),
+  visualOnly('Void Innoculation', 0x3d, 'Void Innoculation.jpg'),
+
 ]);
 
 // ---------------------------------------------------------------------------

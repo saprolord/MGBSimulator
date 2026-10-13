@@ -10,6 +10,7 @@
  */
 
 import { GRID_SIZE, TILE } from '../config.js';
+import { getBlock } from '../blocks.js';
 
 export const createTile = (type = TILE.EMPTY, block = null, rotation = 0) => ({ type, block, rotation });
 
@@ -69,11 +70,22 @@ export function collectPlacements(grid) {
   return placements;
 }
 
-/** Place blocks wherever the tile is an empty slot. Returns how many were placed. */
+/** How many tiles currently hold the given block. */
+export const countBlock = (grid, name) => grid.flat().filter((tile) => tile.block === name).length;
+
+/** False if the block has a `maxPerShip` limit (see blocks.js) that the grid already reached. */
+export function canPlaceBlock(grid, name) {
+  const limit = getBlock(name)?.maxPerShip;
+  return limit === undefined || countBlock(grid, name) < limit;
+}
+
+/** Place blocks wherever the tile is an empty slot (and any per-ship limit allows). Returns how many were placed. */
+
 export function applyPlacements(grid, placements) {
   let placed = 0;
   for (const { r, c, block, rotation } of placements) {
     if (!inBounds(grid, r, c) || grid[r][c].type !== TILE.EMPTY) continue;
+    if (!canPlaceBlock(grid, block)) continue;
     grid[r][c].block = block;
     grid[r][c].rotation = rotation;
     placed++;

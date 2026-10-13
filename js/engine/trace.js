@@ -17,7 +17,7 @@ import { KIND } from './ship.js';
 
 /** @returns {number[][]} one array of cell indices per finished path */
 export function traceShip(ship) {
-  const { emitter, kind, rot, block, next, size } = ship;
+  const { emitter, kind, rot, block, next } = ship;
   if (!emitter) return [];
 
   // Node storage (struct-of-arrays). A node = "a projectile standing on `cells[id]`".
@@ -27,7 +27,7 @@ export function traceShip(ship) {
   const originals = [1];
 
   const paths = [];
-  const visit = { cell: 0, heading: 0, rot: 0, damage: 1, original: 1, turnActive: 0, stamps: null };
+  const visit = { cell: 0, heading: 0, rot: 0, damage: 1, original: 1, turnActive: 0, stamps: null, ship };
 
   let frontier = [0];
   let nextFrontier = [];
@@ -59,6 +59,14 @@ export function traceShip(ship) {
   const out = {
     emit: (heading) => spawn(heading, visit.original),
     emitCopy: (heading) => spawn(heading, 0),
+    // Teleport: the path so far ends on the current tile and a NEW path starts at `cell`
+    // (no line is drawn between the two).
+    emitAt: (cell, heading) => {
+      finish(spawnParent, visit.cell);
+      nextFrontier.push(addNode(cell, -1, heading, visit.original));
+      spawned++;
+    },
+
     emitOneOf: (a, b, c) => {
       spawn(a, visit.original);
       spawn(b, visit.original);

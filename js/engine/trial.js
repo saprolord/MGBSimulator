@@ -68,19 +68,24 @@ export class TrialRunner {
     this.tail = 0;
 
     // The projectile currently entering a block; reused for every visit (see blocks.js).
-    this.visit = { cell: 0, heading: 0, rot: 0, damage: 0, original: 1, turnActive: 0, stamps: null };
+    this.visit = { cell: 0, heading: 0, rot: 0, damage: 0, original: 1, turnActive: 0, stamps: null, ship };
   }
 
   // ---- `out` interface used by blocks' route() -------------------------------------------
 
   /** Release a projectile from the current block. Keeps "original" status. */
   emit(heading) {
-    this.#push(heading, this.visit.original);
+    this.#push(this.visit.cell, heading, this.visit.original);
   }
 
   /** Release a non-original copy. */
   emitCopy(heading) {
-    this.#push(heading, 0);
+    this.#push(this.visit.cell, heading, 0);
+  }
+
+  /** Release the projectile from a DIFFERENT tile (teleport). It leaves `cell` travelling `heading`. */
+  emitAt(cell, heading) {
+    this.#push(cell, heading, this.visit.original);
   }
 
   /** Release exactly one projectile, heading chosen uniformly from the given headings. */
@@ -93,11 +98,11 @@ export class TrialRunner {
     }
   }
 
-  #push(heading, original) {
+  #push(cell, heading, original) {
     const t = this.tail;
     if (t >= QUEUE_CAPACITY) return; // unreachable while blocks respect maxEmitsPerVisit
     const v = this.visit;
-    this.qCell[t] = v.cell;
+    this.qCell[t] = cell;
     this.qHeading[t] = heading;
     this.qDamage[t] = v.damage;
     this.qOriginal[t] = original;

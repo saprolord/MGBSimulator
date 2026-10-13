@@ -33,6 +33,7 @@ export function compileShip(grid) {
   const ejectors = [];
   let emptyCount = 0;
   let hasStockpile = false;
+  let portalOut = null; // { cell, heading } of the output portal (at most one is used)
 
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -46,6 +47,7 @@ export function compileShip(grid) {
             block[cell] = getBlock(tile.block); // null for unknown names -> acts as a wall
             rot[cell] = fromDegrees(tile.rotation);
             if (tile.block === 'Damage Stockpile') hasStockpile = true;
+            if (block[cell]?.portal === 'out' && portalOut === null) portalOut = { cell, heading: rot[cell] };
           } else {
             kind[cell] = KIND.FREE;
             emptyCount++;
@@ -74,7 +76,7 @@ export function compileShip(grid) {
     }
   }
 
-  return { size, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile };
+  return { size, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile, portalOut };
 }
 
 /** Damage Stockpile: +10 % damage for every empty tile, applied when the projectile is ejected. */
