@@ -11,7 +11,7 @@
 </head>
 <body>
   <header>
-    <h1>MGB Damage Simulator v0.9</h1>
+    <h1>MGB Damage Simulator v0.95</h1>
   </header>
 
   <main class="app-container">
@@ -54,6 +54,12 @@
         <div class="action-row">
           <button id="btn-share" class="secondary share-btn" title="Copy shareable build link to clipboard">Share Build Link</button>
         </div>
+        <div class="action-row code-row">
+          <input type="text" id="game-code-input" placeholder="Paste game ship code" aria-label="Game ship code" autocomplete="off" spellcheck="false">
+          <button id="btn-import-code" class="secondary" title="Import the code in the box (or from the clipboard if the box is empty)">Import</button>
+          <button id="btn-export-code" class="secondary" title="Copy this build as an in-game ship code">Copy Code</button>
+        </div>
+
       </div>
     </section>
 

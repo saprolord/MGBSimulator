@@ -21,6 +21,7 @@ const COLORS = {
   fallbackTile: '#222222',
   fallbackDamageBlock: '#8e24aa',
   fallbackBlock: '#005f9e',
+  cleanGrey: '#686868'
 };
 
 export class BoardView {
@@ -122,6 +123,8 @@ export class BoardView {
 
     const sprite = this.sprites.get(tile.block);
     if (sprite) {
+      ctx.fillStyle=COLORS.cleanGrey;
+      ctx.fillRect(-HALF, -HALF, TILE_SIZE, TILE_SIZE);
       ctx.drawImage(sprite, -HALF, -HALF, TILE_SIZE, TILE_SIZE);
     } else {
       ctx.fillStyle = tile.block.includes('Damage') ? COLORS.fallbackDamageBlock : COLORS.fallbackBlock;

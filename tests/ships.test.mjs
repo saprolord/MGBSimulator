@@ -57,7 +57,7 @@ test('generator direction is read from the map and the engine fires that way', (
 });
 
 test('several ejectors: each reachable one pays out; unused ones count for Ejector Damage', () => {
-  const grid = createGridForShip('example-sideways'); // generator faces east, ejectors on the right wall
+  const grid = parseShipMap(['##########', '#.......E#', '#........#', '#>......E#', '#........#', '#........#', '##########']); // generator faces east, 2 ejectors
   const sim = new Simulation(grid, { trials: 10 });
   sim.run(10);
   assert.equal(sim.result().ev, 1);
@@ -83,7 +83,7 @@ test('switching ship keeps blocks that still fit and drops those that do not', (
   grid[9][9].block = 'Add 1 Damage'; // lands on a wall in the compact ship
   const carried = collectPlacements(grid);
 
-  replaceGrid(grid, createGridForShip('example-compact'));
+  replaceGrid(grid, parseShipMap(['#######', '#..E..#', '#.....#', '#.....#', '#.....#', '#..^..#', '#######']));
   const kept = applyPlacements(grid, carried);
 
   assert.equal(kept, 1);

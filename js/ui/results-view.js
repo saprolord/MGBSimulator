@@ -7,6 +7,8 @@
  * Requires Chart.js to be loaded as a global (see the <script> tag in index.html).
  */
 
+import { formatLabels, formatNumber } from './format.js';
+
 const COLORS = { bar: '#007acc', barBorder: '#0094f0', axisTitle: '#888888', tick: '#cccccc', grid: '#333333' };
 
 /** Top of the Y axis (in %): a tidy number just above the tallest bar. */
@@ -33,15 +35,16 @@ export class ResultsView {
     this.chartCanvas = chartCanvas;
   }
 
-  /** @param {{ ev: number, min: number, max: number, distribution: {label: string, probability: number}[] }} result */
+  /** @param {{ ev: number, min: number, max: number, chartDistribution: {label: string, probability: number}[] }} result */
   show(result) {
-    this.evElement.textContent = String(result.ev);
-    this.rangeElement.textContent = `${result.min} / ${result.max}`;
-    this.#showChart(result.distribution);
+    // The KPIs use the full result; the chart uses chartDistribution (thin high-end tail cut, rest re-binned).
+    this.evElement.textContent = formatNumber(result.ev);
+    this.rangeElement.textContent = `${formatNumber(result.min)} / ${formatNumber(result.max)}`;
+    this.#showChart(result.chartDistribution);
   }
 
   #showChart(distribution) {
-    const labels = distribution.map((bar) => `${bar.label} Dmg`);
+    const labels = formatLabels(distribution.map((bar) => bar.label)).map((label) => `${label} Dmg`);
     const percents = distribution.map((bar) => Math.round(bar.probability * 1000) / 10);
     const yMax = pickYMax(Math.max(...percents, 0));
     const stepSize = pickStepSize(yMax);

@@ -21,7 +21,7 @@ function makeDimmedSprite(image) {
   canvas.width = image.naturalWidth || TILE_SIZE;
   canvas.height = image.naturalHeight || TILE_SIZE;
   const ctx = canvas.getContext('2d');
-  ctx.filter = 'grayscale(100%) opacity(0.55)';
+  ctx.filter = 'grayscale(100%) opacity(1)';
   ctx.drawImage(image, 0, 0);
   return canvas;
 }

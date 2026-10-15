@@ -40,6 +40,11 @@ export class SimPanel {
     this.calcButton.addEventListener('click', onCalculate);
   }
 
+  /** Put a ship's fire rate in the Fire Rate box (1 -> "1.0", 9.9 -> "9.9"). */
+  setFireRate(rate) {
+    this.fireRateInput.value = Number.isInteger(rate) ? rate.toFixed(1) : String(rate);
+  }
+
   /** Validated simulation settings (bad or empty inputs fall back to sensible defaults). */
   readParams() {
     const fireRate = parseFloat(this.fireRateInput.value);

@@ -1,7 +1,7 @@
 /**
  * SIMULATION
  * ==========
- * Runs many trials and aggregates them into { ev, min, max, distribution }.
+ * Runs many trials and aggregates them into { ev, min, max, distribution, chartDistribution }.
  *
  * It is written as a resumable object (call run() repeatedly) so the caller decides how to
  * schedule the work: in a Web Worker, in time-sliced chunks on the main thread, or all at once
@@ -12,7 +12,7 @@ import { DAMAGE_PRECISION } from '../config.js';
 import { compileShip, unusedDamageBonus } from './ship.js';
 import { traceShip } from './trace.js';
 import { TrialRunner } from './trial.js';
-import { buildDistribution } from './histogram.js';
+import { buildChartDistribution, buildDistribution } from './histogram.js';
 
 /**
  * @typedef {object} SimulationParams
@@ -90,7 +90,8 @@ export class Simulation {
   /** Final statistics. Call once the simulation is done. */
   result() {
     if (this.runner === null) {
-      return { ev: 0, min: 0, max: 0, distribution: [{ label: '0', probability: 1 }] };
+      const only = [{ label: '0', probability: 1 }];
+      return { ev: 0, min: 0, max: 0, distribution: only, chartDistribution: only };
     }
     const entries = [...this.counts]
       .sort((a, b) => a[0] - b[0])
@@ -100,7 +101,8 @@ export class Simulation {
       ev: Number((this.sum / DAMAGE_PRECISION / this.total).toFixed(2)),
       min: this.min / DAMAGE_PRECISION,
       max: this.max / DAMAGE_PRECISION,
-      distribution: buildDistribution(entries, this.total),
+      distribution: buildDistribution(entries, this.total), // every result, binned
+      chartDistribution: buildChartDistribution(entries, this.total), // what the chart shows (thin tail cut, rest re-binned)
     };
   }
 }

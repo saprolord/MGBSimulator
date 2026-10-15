@@ -30,4 +30,14 @@ export const ENGINE_LIMITS = Object.freeze({
 export const MAX_CHART_BARS = 30;
 
 /** Per-trial damage is rounded to 1/DAMAGE_PRECISION (10 => one decimal place). */
+/**
+ * Where the game's 11x11 code grid sits on a ship's text map, as (rows, columns) from the map's
+ * top-left corner. Your ShipParser.py puts a wall row on top and one extra column on the right,
+ * so code tile (0,0) = map row 1, column 0.
+ */
+export const GAME_CODE_OFFSET = Object.freeze({ r: 1, c: 0 });
+
+/** Chart: bars at the high end with a probability below this are hidden (0.002 = 0.2 %). */
+export const CHART_TAIL_CUTOFF = 0.002;
+
 export const DAMAGE_PRECISION = 10;

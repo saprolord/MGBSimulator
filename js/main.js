@@ -15,11 +15,13 @@ import { isDirectionalBlock } from './blocks.js';
 import { headingBetween, toDegrees } from './headings.js';
 import { DEFAULT_SHIP_ID } from './ships.js';
 import { clearBlocks, hasBlock, removeBlock, collectPlacements, applyPlacements, replaceGrid, canPlaceBlock } from  './model/grid.js';
-import { AVAILABLE_SHIPS, SHIP_PROBLEMS, createGridForShip, hasShip } from './model/ship-loader.js';
+import { AVAILABLE_SHIPS, SHIP_PROBLEMS, createGridForShip, getShipInfo, hasShip } from './model/ship-loader.js';
 import { buildHash, parseHash, parseLayout, serializeLayout } from './model/share-code.js';
+import { gameCodec, GameCodeError } from './model/game-code.js';
 import { traceGrid } from './engine/index.js';
 import { SpriteCache } from './ui/assets.js';
 import { BoardView } from './ui/board-view.js';
+import { CodePanel } from './ui/code-panel.js';
 import { Palette } from './ui/palette.js';
 import { ResultsView } from './ui/results-view.js';
 import { ShipPicker } from './ui/ship-picker.js';
@@ -32,7 +34,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------------------------
-for (const problem of SHIP_PROBLEMS) console.error(problem); // a broken ship map is skipped, not fatal
+for (const problem of [...SHIP_PROBLEMS, ...gameCodec.problems]) console.error(problem); // a broken ship map is skipped, not fatal
 
 const grid = createGridForShip(DEFAULT_SHIP_ID);
 let currentShipId = DEFAULT_SHIP_ID;
@@ -45,7 +47,13 @@ const results = new ResultsView({
   chartCanvas: $('chart-canvas'),
 });
 const shipPicker = new ShipPicker($('ship-select'), AVAILABLE_SHIPS, (shipId) => changeShip(shipId));
+const codePanel = new CodePanel({
+  onImport: (text) => importGameCode(text),
+  onExport: () => exportGameCode(),
+  notify: (message) => toast(message),
+});
 const simPanel = new SimPanel({ onCalculate: () => runCalculation() });
+simPanel.setFireRate(getShipInfo(DEFAULT_SHIP_ID).fireRate);
 const simulationClient = new SimulationClient();
 
 const selectedInfo = $('selected-info');
@@ -81,21 +89,65 @@ function syncUrl() {
 }
 
 /**
- * Switch to another ship. Blocks are carried over to tiles that are still empty slots on the new
- * ship; the rest are dropped.
- */
+ * Show `shipId` on the board with the given blocks on it (blocks that do not fit are skipped).
++ * The one place that swaps ships. Returns how many blocks were placed.
+  */
+function setShip(shipId, placements = []) {
+  replaceGrid(grid, createGridForShip(shipId));
+  currentShipId = shipId;
+  const placed = applyPlacements(grid, placements);
+  view.selected = null;
+  shipPicker.value = shipId;
+  simPanel.setFireRate(getShipInfo(shipId).fireRate);
+  onLayoutChanged();
+  return placed;
+}
+
+/** Dropdown: switch ship, carrying blocks over to tiles that are still empty slots. */
 function changeShip(shipId) {
   if (!hasShip(shipId) || shipId === currentShipId) return;
   const carried = collectPlacements(grid);
-  replaceGrid(grid, createGridForShip(shipId));
-  currentShipId = shipId;
-  const kept = applyPlacements(grid, carried);
-
-  view.selected = null;
-  shipPicker.value = shipId;
-  onLayoutChanged();
+  const kept = setShip(shipId, carried);
   if (kept < carried.length) toast(`${carried.length - kept} block(s) did not fit the new ship and were removed.`);
 }
+
+ // ---------------------------------------------------------------------------------------------
+// In-game ship codes
+// ---------------------------------------------------------------------------------------------
+
+/** Import a pasted game code: switches to its ship and replaces the build. Returns true on success. */
+function importGameCode(text) {
+  try {
+    const { shipId, placements, unknownItems, badOrientations } = gameCodec.importCode(text);
+    const placed = setShip(shipId, placements);
+
+    const notes = [];
+    if (placed < placements.length) notes.push(`${placements.length - placed} did not fit`);
+    if (unknownItems > 0) notes.push(`${unknownItems} unknown item ID(s) skipped`);
+    if (badOrientations > 0) notes.push(`${badOrientations} with a bad orientation skipped`);
+    const shipName = AVAILABLE_SHIPS.find((ship) => ship.id === shipId)?.name ?? shipId;
+    toast(`Imported "${shipName}" with ${placed} block(s)` + (notes.length ? ` (${notes.join(', ')})` : '.'));
+
+    runCalculation();
+    return true;
+  } catch (error) {
+    if (!(error instanceof GameCodeError)) throw error;
+    toast(error.message);
+    return false;
+  }
+}
+
+/** The current build as a game code, or null (after telling the user why) if it cannot be made. */
+function exportGameCode() {
+  try {
+    return gameCodec.exportCode(grid, currentShipId);
+  } catch (error) {
+    if (!(error instanceof GameCodeError)) throw error;
+    toast(error.message);
+    return null;
+  }
+}
+
 
 // ---------------------------------------------------------------------------------------------
 // Editing the grid
@@ -244,13 +296,7 @@ function loadBuildFromUrl() {
   const placements = link.code ? parseLayout(link.code, grid.length) : [];
   if (placements === null) return false; // malformed code: leave everything as it is
 
-  replaceGrid(grid, createGridForShip(link.shipId));
-  currentShipId = link.shipId;
-  applyPlacements(grid, placements);
-
-  view.selected = null;
-  shipPicker.value = link.shipId;
-  onLayoutChanged();
+  setShip(link.shipId, placements);
   runCalculation();
   return true;
 }

@@ -127,7 +127,8 @@ test('no generator -> zero damage', () => {
   const grid = createDefaultGrid();
   grid[10][5].type = 'Empty Slot';
   const result = simulate(grid, { trials: 10 });
-  assert.deepEqual(result, { ev: 0, min: 0, max: 0, distribution: [{ label: '0', probability: 1 }] });
+  const only = [{ label: '0', probability: 1 }];
+  assert.deepEqual(result, { ev: 0, min: 0, max: 0, distribution: only, chartDistribution: only });
 });
 
 test('plain ship deals 1 damage; fire rate scales it', () => {

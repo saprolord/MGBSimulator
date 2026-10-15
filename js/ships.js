@@ -40,7 +40,7 @@ export const SHIPS = [
   // ---- Ships from game - ID number is the export number form Game -----------------------
  {
 id:'000',
-name:'﻿Rider-used',
+name:'Rider-used',
 map: [
 '############',
 '############',
