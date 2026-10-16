@@ -2,7 +2,7 @@
 
 Monte-Carlo damage simulator for Miner Gun Builder. Plain HTML/CSS/JS,
 
-AI was used for heavily for refactor, optimisation and some function upgrade. 
+AI was used  heavily for refactor, optimisation and some function upgrade. 
 
 ## Running it
 
