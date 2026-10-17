@@ -9,6 +9,7 @@
  */
 
 import { DAMAGE_PRECISION } from '../config.js';
+import { DEFAULT_TUNING } from '../tuning.js';
 import { compileShip, unusedDamageBonus } from './ship.js';
 import { traceShip } from './trace.js';
 import { TrialRunner } from './trial.js';
@@ -22,6 +23,7 @@ import { buildChartDistribution, buildDistribution } from './histogram.js';
  * @property {number} [maxTier=0]          player's max tier (used by Tier Damage)
  * @property {number} [burstCount=0]       extra shots fired per trial
  * @property {number} [burstDamageMult=1]  damage multiplier for those extra shots
+ * @property {object} [tuning]             overrides for DEFAULT_TUNING (see tuning.js); missing keys keep their default
  */
 
 export class Simulation {
@@ -32,6 +34,7 @@ export class Simulation {
    */
   constructor(grid, params, rng = Math.random) {
     const { trials, fireRate = 1, baseDamage = 1, maxTier = 0, burstCount = 0, burstDamageMult = 1 } = params;
+    const tuning = { ...DEFAULT_TUNING, ...params.tuning };
 
     this.total = trials;
     this.completed = 0;
@@ -57,7 +60,10 @@ export class Simulation {
 
     this.runner = new TrialRunner(
       ship,
-      { baseDamage, burstCount, burstDamageMult, maxTier, unusedEjectors, unusedDamageBonus: unusedDamageBonus(ship) },
+      {
+        baseDamage, burstCount, burstDamageMult, maxTier, unusedEjectors, tuning,
+        unusedDamageBonus: unusedDamageBonus(ship, tuning.stockpileRate),
+      },
       rng,
     );
   }

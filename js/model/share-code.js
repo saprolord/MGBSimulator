@@ -8,7 +8,7 @@
  *     TT BB R
  *     |  |  `-- rotation in quarter-turns (0 = 0deg, 1 = 90deg, 2 = 180deg, 3 = 270deg)
  *     |  `----- block shareId (see blocks.js)
- *     `-------- tile index = row * GRID_SIZE + col
+ *     `-------- tile index = row * (tiles per row) + col      (12 per row on the standard board)
  *
  * This format is a public contract: links people already shared must keep working.
  * Never change a block's shareId and never change this layout without a version prefix.
@@ -23,7 +23,7 @@ import { GRID_SIZE, TILE } from '../config.js';
 import { getBlock, getBlockByShareId } from '../blocks.js';
 import { fromDegrees, toDegrees } from '../headings.js';
 import { DEFAULT_SHIP_ID } from '../ships.js';
-import { hasBlock, clearBlocks, applyPlacements } from './grid.js';
+import { hasBlock, clearBlocks, applyPlacements, inBounds } from './grid.js';
 
 const CHUNK = 5;
 const hex = (n, width) => n.toString(16).padStart(width, '0');
@@ -35,7 +35,7 @@ export function serializeLayout(grid) {
       if (!hasBlock(tile)) return;
       const block = getBlock(tile.block);
       if (!block) return;
-      code += hex(r * GRID_SIZE + c, 2) + hex(block.shareId, 2) + hex(fromDegrees(tile.rotation), 1);
+      code += hex(r * row.length + c, 2) + hex(block.shareId, 2) + hex(fromDegrees(tile.rotation), 1);
     });
   });
   return code;
@@ -69,10 +69,10 @@ export function parseLayout(code, size = GRID_SIZE) {
  * Returns true if at least one block was placed. An invalid code leaves the grid untouched.
  */
 export function applyLayout(grid, code) {
-  const placements = parseLayout(code, grid.length);
+  const placements = parseLayout(code, grid[0].length);
   if (!placements) return false;
 
-  const valid = placements.filter(({ r, c }) => r < grid.length && c < grid.length && grid[r][c].type === TILE.EMPTY);
+  const valid = placements.filter(({ r, c }) => inBounds(grid, r, c) && grid[r][c].type === TILE.EMPTY);
   if (valid.length === 0) return false;
 
   clearBlocks(grid);

@@ -18,15 +18,22 @@ import { clearBlocks, hasBlock, removeBlock, collectPlacements, applyPlacements,
 import { AVAILABLE_SHIPS, SHIP_PROBLEMS, createGridForShip, getShipInfo, hasShip } from './model/ship-loader.js';
 import { buildHash, parseHash, parseLayout, serializeLayout } from './model/share-code.js';
 import { gameCodec, GameCodeError } from './model/game-code.js';
+import { changedTuning } from './loadout/effects.js';
+import { createPerkTree } from './loadout/perk-tree.js';
+import { GAME_DATA, DATA_PROBLEMS } from './loadout/data.js';
+import { loadSavedLoadout, resolveRules, saveLoadout } from './loadout/loadout.js';
 import { traceGrid } from './engine/index.js';
 import { SpriteCache } from './ui/assets.js';
 import { BoardView } from './ui/board-view.js';
 import { CodePanel } from './ui/code-panel.js';
 import { Palette } from './ui/palette.js';
 import { ResultsView } from './ui/results-view.js';
+import { PerksView } from './ui/perks-view.js';
 import { ShipPicker } from './ui/ship-picker.js';
+import { SkillsView } from './ui/skills-view.js';
 import { SimPanel } from './ui/sim-panel.js';
 import { SimulationClient } from './ui/sim-client.js';
+import { Tabs } from './ui/tabs.js';
 import { showToast } from './ui/toast.js';
 
 const $ = (id) => document.getElementById(id);
@@ -34,7 +41,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------------------------
-for (const problem of [...SHIP_PROBLEMS, ...gameCodec.problems]) console.error(problem); // a broken ship map is skipped, not fatal
+for (const problem of [...SHIP_PROBLEMS, ...gameCodec.problems, ...DATA_PROBLEMS]) console.error(problem); // a broken ship map is skipped, not fatal
 
 const grid = createGridForShip(DEFAULT_SHIP_ID);
 let currentShipId = DEFAULT_SHIP_ID;
@@ -54,6 +61,29 @@ const codePanel = new CodePanel({
 });
 const simPanel = new SimPanel({ onCalculate: () => runCalculation() });
 simPanel.setFireRate(getShipInfo(DEFAULT_SHIP_ID).fireRate);
+
+// ---- Captain / skills / perks (apply to every ship mode) ----
+const loadout = loadSavedLoadout();
+const perkTree = createPerkTree(GAME_DATA.perks, GAME_DATA.maxPerkPoints);
+let activeTab = 'ships';
+new Tabs({
+  onChange: (name) => {
+    activeTab = name;
+    if (name === 'ships') view.requestDraw(); // the canvas was hidden: redraw it
+  },
+});
+new SkillsView({ container: $('skills-view'), loadout, data: GAME_DATA, onChange: () => onLoadoutChanged() });
+new PerksView({
+  container: $('perk-map'),
+  pointsLabel: $('perk-points'),
+  resetButton: $('btn-perks-reset'),
+  tree: perkTree,
+  perks: GAME_DATA.perks,
+  loadout,
+  notify: (message) => toast(message),
+  onChange: () => onLoadoutChanged(),
+});
+$('fireRateInput').addEventListener('input', () => refreshEffective());
 const simulationClient = new SimulationClient();
 
 const selectedInfo = $('selected-info');
@@ -99,6 +129,7 @@ function setShip(shipId, placements = []) {
   view.selected = null;
   shipPicker.value = shipId;
   simPanel.setFireRate(getShipInfo(shipId).fireRate);
+  refreshEffective();
   onLayoutChanged();
   return placed;
 }
@@ -216,6 +247,7 @@ view.canvas.addEventListener('contextmenu', (event) => {
 window.addEventListener('keydown', (event) => {
   // Don't hijack Backspace/Delete while the user is typing in a number box.
   if (event.target instanceof Element && event.target.closest('input, textarea, select')) return;
+  if (activeTab !== 'ships') return; // the board is hidden on the other tabs
 
   if (event.key === 'Delete' || event.key === 'Backspace') {
     deleteSelectedBlock();
@@ -266,6 +298,34 @@ $('btn-share').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// Rules from captain, skills and perks
+// ---------------------------------------------------------------------------------------------
+
+/** The numbers the simulation will use: the ship's fire rate and plain base damage, plus the loadout. */
+function currentRules() {
+  const { fireRate, baseDamage } = simPanel.readParams();
+  return resolveRules(loadout, { fireRate, baseDamage });
+}
+
+const shown = (value) => Number(value.toFixed(2));
+
+/** The line under the inputs, so it is always clear what skills and perks are doing. */
+function refreshEffective() {
+  const rules = currentRules();
+  const tweaks = changedTuning(rules.tuning);
+  simPanel.showEffective(
+    `With captain, skills & perks: base damage ${shown(rules.baseDamage)} · fire rate ${shown(rules.fireRate)}` +
+      (tweaks.length ? ` · ${tweaks.length} item rule${tweaks.length > 1 ? 's' : ''} changed` : ''),
+    tweaks.map(({ key, from, to }) => `${key}: ${from} -> ${shown(to)}`).join('\n'),
+  );
+}
+
+function onLoadoutChanged() {
+  saveLoadout(loadout);
+  refreshEffective();
+}
+
+// ---------------------------------------------------------------------------------------------
 // Simulation
 // ---------------------------------------------------------------------------------------------
 async function runCalculation() {
@@ -273,9 +333,11 @@ async function runCalculation() {
   isRunning = true;
 
   const params = simPanel.readParams();
+  const rules = currentRules(); // captain level, skills and perks applied on top of the ship
+  const simulationParams = { ...params, baseDamage: rules.baseDamage, fireRate: rules.fireRate, tuning: rules.tuning };
   simPanel.start(params.trials);
   try {
-    const result = await simulationClient.run(grid, params, (done, total) => simPanel.setProgress(done, total));
+    const result = await simulationClient.run(grid, simulationParams, (done, total) => simPanel.setProgress(done, total));
     results.show(result);
   } catch (error) {
     console.error('Simulation failed:', error);
@@ -293,7 +355,7 @@ function loadBuildFromUrl() {
   const link = parseHash(window.location.hash);
   if (!link || !hasShip(link.shipId)) return false;
 
-  const placements = link.code ? parseLayout(link.code, grid.length) : [];
+  const placements = link.code ? parseLayout(link.code, grid[0].length) : [];
   if (placements === null) return false; // malformed code: leave everything as it is
 
   setShip(link.shipId, placements);
@@ -303,4 +365,5 @@ function loadBuildFromUrl() {
 
 window.addEventListener('hashchange', loadBuildFromUrl);
 
+refreshEffective();
 if (!loadBuildFromUrl()) onLayoutChanged();

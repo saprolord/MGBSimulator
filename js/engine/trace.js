@@ -127,6 +127,6 @@ export function traceShip(ship) {
 }
 
 /** Convert index paths to [{ r, c }, ...] for the UI. */
-export function pathsToCoordinates(paths, size) {
-  return paths.map((path) => path.map((cell) => ({ r: Math.floor(cell / size), c: cell % size })));
+export function pathsToCoordinates(paths, cols) {
+  return paths.map((path) => path.map((cell) => ({ r: Math.floor(cell / cols), c: cell % cols })));
 }

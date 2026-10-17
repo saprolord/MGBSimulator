@@ -33,7 +33,7 @@ export class TrialRunner {
   /**
    * @param {object} ship    result of compileShip()
    * @param {object} params  { baseDamage, burstCount, burstDamageMult, maxTier,
-   *                           unusedEjectors, unusedDamageBonus }
+   *                           unusedEjectors, unusedDamageBonus, tuning }
    * @param {() => number} rng  returns a float in [0, 1)
    */
   constructor(ship, params, rng) {
@@ -44,6 +44,7 @@ export class TrialRunner {
     this.burstCount = params.burstCount;
     this.burstDamageMult = params.burstDamageMult;
     this.maxTier = params.maxTier;
+    this.tuning = params.tuning; // rule numbers, read by the blocks (see tuning.js)
     this.unusedEjectors = params.unusedEjectors;
     this.ejectionMultiplier = 1 + params.unusedDamageBonus;
 

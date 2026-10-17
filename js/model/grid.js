@@ -35,7 +35,7 @@ export function createDefaultGrid(size = GRID_SIZE) {
   return grid;
 }
 
-export const inBounds = (grid, r, c) => r >= 0 && r < grid.length && c >= 0 && c < grid.length;
+export const inBounds = (grid, r, c) => r >= 0 && r < grid.length && c >= 0 && c < grid[0].length;
 
 export const hasBlock = (tile) => tile.type === TILE.EMPTY && tile.block !== null;
 

@@ -4,7 +4,7 @@
  * Converts the editable grid (array of tile objects) into flat typed arrays that the path tracer
  * and the simulation can read without any string comparisons, object lookups or bounds maths.
  *
- * Cells are addressed by a flat index:  cell = row * size + col
+ * Cells are addressed by a flat index:  cell = row * cols + col
  */
 
 import { TILE } from '../config.js';
@@ -21,8 +21,9 @@ export const KIND = Object.freeze({
 });
 
 export function compileShip(grid) {
-  const size = grid.length;
-  const cellCount = size * size;
+  const rows = grid.length;
+  const cols = grid[0].length; // the grid may be wider or taller than 12x12 (e.g. custom ships)
+  const cellCount = rows * cols;
 
   const kind = new Uint8Array(cellCount); // KIND.*
   const rot = new Uint8Array(cellCount); // block facing, as a heading
@@ -35,9 +36,9 @@ export function compileShip(grid) {
   let hasStockpile = false;
   let portalOut = null; // { cell, heading } of the output portal (at most one is used)
 
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      const cell = r * size + c;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = r * cols + c;
       const tile = grid[r][c];
 
       switch (tile.type) {
@@ -71,13 +72,13 @@ export function compileShip(grid) {
       for (let h = 0; h < 4; h++) {
         const nr = r + ROW_STEP[h];
         const nc = c + COL_STEP[h];
-        if (nr >= 0 && nr < size && nc >= 0 && nc < size) next[cell * 4 + h] = nr * size + nc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) next[cell * 4 + h] = nr * cols + nc;
       }
     }
   }
 
-  return { size, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile, portalOut };
+  return { rows, cols, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile, portalOut };
 }
 
-/** Damage Stockpile: +10 % damage for every empty tile, applied when the projectile is ejected. */
-export const unusedDamageBonus = (ship) => (ship.hasStockpile ? ship.emptyCount * 0.1 : 0);
+/** Damage Stockpile: + `rate` (10 %) damage for every empty tile, applied when the projectile is ejected. */
+export const unusedDamageBonus = (ship, rate) => (ship.hasStockpile ? ship.emptyCount * rate : 0);

@@ -45,7 +45,7 @@
  *   out.emitOneOf(a, b[, c])  simulation: pick ONE heading at random; path preview: show them all
  *
  * THE `sim` OBJECT - simulation state (see engine/trial.js)
- *   sim.rng(), sim.maxTier, sim.unusedEjectors, and per-tile memory that persists across trials:
+ *   sim.rng(), sim.tuning.<key> (rule numbers, see tuning.js), sim.maxTier, sim.unusedEjectors, and per-tile memory that persists across trials:
  *   sim.charge[], sim.lastDamage[], sim.accCount[], sim.accDamage[], sim.crossRecords.
  */
 
@@ -57,17 +57,8 @@ export const ABSORB = -1;
 // ---------------------------------------------------------------------------
 // Tuning numbers (the game's rules). Change them here, nowhere else.
 // ---------------------------------------------------------------------------
-const GUIDED_TURN_BONUS = 1.1; // each turn after a Guided Damage block: +10 %
-const CHARGE_BONUS_RATE = 0.1; // Charge: bonus damage = 10 % of stored charge
-const CHARGE_DECAY_RATE = 0.1; // Charge: 10 % of the stored charge is spent...
-const CHARGE_STORE_RATE = 0.2; // ...and 20 % of the outgoing damage is stored
-const TIER_DAMAGE_RATE = 0.1; // Tier Damage: +10 % of max tier
-const EJECTOR_DAMAGE_EACH = 10; // Ejector Damage: +10 per unused ejector
-const COMBINE_COUNT = 10; // Combine 10: releases every 10th projectile...
-const COMBINE_MULTIPLIER = 2; // ...with the sum of all 10, doubled
-const X2_CHANCE = 0.33;
-const X10_CHANCE = 0.04;
-const FACTION_CHANCE = 0.45 ;
+// The rule numbers (chances, multipliers, rates) live in tuning.js and are read as `sim.tuning.<key>`,
+// so that skills and perks can change them.
 /** Random Damage: [cumulative weight, multiplier]. Weights are out of 13. */
 const RANDOM_DAMAGE_TABLE = [
   [1, 0],
@@ -82,8 +73,9 @@ const RANDOM_DAMAGE_TABLE = [
 // ---------------------------------------------------------------------------
 const forward = (v, out) => out.emit(v.heading);
 
-const guidedBoost = (v) => (v.turnActive ? v.damage * GUIDED_TURN_BONUS : v.damage);
-const addDamage = (amount) => (v) => v.damage + amount;
+const guidedBoost = (v, sim) => (v.turnActive ? v.damage * sim.tuning.guidedTurnBonus : v.damage);
+/** Effect that adds the tuning value `key` to the damage. */
+const addTuned = (key) => (v, sim) => v.damage + sim.tuning[key];
 
 function define(spec) {
   return Object.freeze({
@@ -133,7 +125,7 @@ export const BLOCKS = Object.freeze([
   // ---- Damage / projectile modifiers --------------------------------------
   define({
     name: 'Add 1 Damage', shareId: 0x03, image: 'More_damage.webp',
-    effect: addDamage(1),
+    effect: addTuned('addDamageSmall'),
     route: forward,
   }),
   define({
@@ -146,12 +138,12 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: 'x2 Damage', shareId: 0x05, image: 'Double_damage.webp',
-    effect: (v, sim) => (sim.rng() < X2_CHANCE ? v.damage * 2 : v.damage),
+    effect: (v, sim) => (sim.rng() < sim.tuning.x2Chance ? v.damage * sim.tuning.x2Multiplier : v.damage),
     route: forward,
   }),
   define({
     name: 'x10 Damage', shareId: 0x09, image: 'Tenfold_damage.webp',
-    effect: (v, sim) => (sim.rng() < X10_CHANCE ? v.damage * 10 : v.damage),
+    effect: (v, sim) => (sim.rng() < sim.tuning.x10Chance ? v.damage * sim.tuning.x10Multiplier : v.damage),
     route: forward,
   }),
   define({
@@ -170,8 +162,8 @@ export const BLOCKS = Object.freeze([
     name: 'Charge', shareId: 0x0d, image: 'Damage_regulator.webp',
     effect: (v, sim) => {
       const stored = sim.charge[v.cell];
-      const damage = v.damage + stored * CHARGE_BONUS_RATE;
-      sim.charge[v.cell] = stored - stored * CHARGE_DECAY_RATE + damage * CHARGE_STORE_RATE;
+      const damage = v.damage + stored * sim.tuning.chargeBonusRate;
+      sim.charge[v.cell] = stored - stored * sim.tuning.chargeDecayRate + damage * sim.tuning.chargeStoreRate;
       return damage;
     },
     route: forward,
@@ -214,7 +206,7 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp', maxPerShip: 1,
-    effect: (v, sim) => v.damage + sim.maxTier * TIER_DAMAGE_RATE,
+    effect: (v, sim) => v.damage + sim.maxTier * sim.tuning.tierDamageRate,
     route: forward,
   }),
   define({
@@ -239,8 +231,8 @@ export const BLOCKS = Object.freeze([
       const i = v.cell;
       sim.accCount[i]++;
       sim.accDamage[i] += v.damage;
-      if (sim.accCount[i] < COMBINE_COUNT) return ABSORB;
-      const combined = sim.accDamage[i] * COMBINE_MULTIPLIER;
+      if (sim.accCount[i] < sim.tuning.combineCount) return ABSORB;
+      const combined = sim.accDamage[i] * sim.tuning.combineMultiplier;
       sim.accCount[i] = 0;
       sim.accDamage[i] = 0;
       return combined;
@@ -258,12 +250,12 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp', maxPerShip: 1,
-    effect: addDamage(100),
+    effect: addTuned('addDamageLarge'),
     route: forward,
   }),
   define({
     name: 'Ejector Damage', shareId: 0x0f, image: '10_damage_unused_ejector.webp', maxPerShip: 1,
-    effect: (v, sim) => v.damage + sim.unusedEjectors * EJECTOR_DAMAGE_EACH,
+    effect: (v, sim) => v.damage + sim.unusedEjectors * sim.tuning.ejectorDamageEach,
     route: forward,
   }),
   define({
@@ -275,17 +267,17 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: 'Thermite Round', shareId: 0x30, image: 'Thermite Round.png',
-    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    effect: (v, sim) => (sim.rng() < sim.tuning.factionChance ? v.damage * sim.tuning.factionMultiplier : v.damage),
     route: forward,
   }),
   define({
     name: 'Charged Round', shareId: 0x31, image: 'Charged Round.png',
-    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    effect: (v, sim) => (sim.rng() < sim.tuning.factionChance ? v.damage * sim.tuning.factionMultiplier : v.damage),
     route: forward,
   }),
   define({
     name: 'Plutonium Round', shareId: 0x32, image: 'Plutonium Round.png',
-    effect: (v, sim) => (sim.rng() < FACTION_CHANCE ? v.damage * 2.6 : v.damage),
+    effect: (v, sim) => (sim.rng() < sim.tuning.factionChance ? v.damage * sim.tuning.factionMultiplier : v.damage),
     route: forward,
   }),
   define({

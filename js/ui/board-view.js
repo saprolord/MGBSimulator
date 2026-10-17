@@ -8,7 +8,7 @@
  * frame (e.g. 50 images finishing loading) result in a single redraw.
  */
 
-import { GRID_SIZE, TILE, TILE_SIZE } from '../config.js';
+import { TILE, TILE_SIZE } from '../config.js';
 import { hasBlock } from '../model/grid.js';
 
 const HALF = TILE_SIZE / 2;
@@ -21,7 +21,7 @@ const COLORS = {
   fallbackTile: '#222222',
   fallbackDamageBlock: '#8e24aa',
   fallbackBlock: '#005f9e',
-  cleanGrey: '#686868'
+  cleanGrey: '#555'
 };
 
 export class BoardView {
@@ -59,16 +59,19 @@ export class BoardView {
     const y = ((event.clientY - rect.top) * this.canvas.height) / rect.height;
     const c = Math.floor(x / TILE_SIZE);
     const r = Math.floor(y / TILE_SIZE);
-    return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE ? { r, c } : null;
+    return r >= 0 && r < this.grid.length && c >= 0 && c < this.grid[0].length ? { r, c } : null;
   }
 
   draw() {
     const { ctx, canvas, grid } = this;
+    const rows = grid.length;
+    const cols = grid[0].length;
+    this.#fitCanvas(rows, cols);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Layer 1: tile backgrounds and grid lines
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
         this.#drawTileBase(grid[r][c], c * TILE_SIZE, r * TILE_SIZE);
       }
     }
@@ -77,8 +80,8 @@ export class BoardView {
     this.#drawPaths();
 
     // Layer 3: modifier blocks, then the selection frame
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
         const tile = grid[r][c];
         if (hasBlock(tile)) this.#drawBlock(tile, c * TILE_SIZE, r * TILE_SIZE);
       }
@@ -89,6 +92,15 @@ export class BoardView {
       ctx.lineWidth = 3;
       ctx.strokeRect(this.selected.c * TILE_SIZE + 2, this.selected.r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
     }
+  }
+
+  /** Size the canvas to the grid (12x12 -> 600x600; a 13-row ship gets a taller canvas). */
+  #fitCanvas(rows, cols) {
+    const { canvas } = this;
+    if (canvas.width === cols * TILE_SIZE && canvas.height === rows * TILE_SIZE) return;
+    canvas.width = cols * TILE_SIZE;
+    canvas.height = rows * TILE_SIZE;
+    canvas.style.aspectRatio = `${cols} / ${rows}`;
   }
 
   #drawTileBase(tile, x, y) {
