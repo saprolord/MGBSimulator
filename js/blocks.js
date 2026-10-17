@@ -59,14 +59,7 @@ export const ABSORB = -1;
 // ---------------------------------------------------------------------------
 // The rule numbers (chances, multipliers, rates) live in tuning.js and are read as `sim.tuning.<key>`,
 // so that skills and perks can change them.
-/** Random Damage: [cumulative weight, multiplier]. Weights are out of 13. */
-const RANDOM_DAMAGE_TABLE = [
-  [1, 0],
-  [10, 1],
-  [11, 2],
-  [12, 3],
-  [13, 4],
-];
+
 
 // ---------------------------------------------------------------------------
 // Reusable routing / effect building blocks
@@ -150,7 +143,7 @@ export const BLOCKS = Object.freeze([
     name: 'Random Damage', shareId: 0x0a, image: 'Gamble_damage.webp',
     effect: (v, sim) => {
       const roll = sim.rng() * 13;
-      for (const [limit, multiplier] of RANDOM_DAMAGE_TABLE) {
+      for (const [limit, multiplier] of sim.tuning.Random_Damage_Table) {
         if (roll < limit) return v.damage * multiplier;
       }
       return v.damage * RANDOM_DAMAGE_TABLE[RANDOM_DAMAGE_TABLE.length - 1][1];
