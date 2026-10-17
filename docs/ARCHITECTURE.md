@@ -66,30 +66,45 @@ js/ui/perks-view.js     SVG hex map          index.html             one panel pe
 The loadout is saved in the browser (`localStorage`, key `mgb-loadout-v1`) and cleaned up on load, so
 removing a perk from the data never breaks a saved loadout.
 
-## Roadmap: the custom ship (not built yet)
+## The custom ship
 
-Already done underneath: the engine, path preview, board drawing and share codes handle any
-rows x cols grid, so a 13 x 12 board (12 x 12 plus the generator row) needs no engine change.
+A custom ship is a 12 x 12 board that starts full of walls, divided into 4 x 4 **slots** of 3 x 3
+tiles. Each slot holds one **custom block** whose pattern (`#` wall, `.` empty, `E` ejector) is
+stamped onto the slot. Normal items are then placed on the empty tiles exactly like on any ship.
+The generator sits in an extra row below the board (13 rows x 12 columns in total).
 
-Still to build:
+```
+js/custom/custom-blocks.js   DATA: the custom blocks (patterns, shareIds) and the settings
+                             (generator column, fire rate)  <- edit this to add real blocks
+js/custom/custom-ship.js     logic: layout (16 slots), stamping, rotation, share code, validation
+js/ui/custom-palette.js      the custom block picker (draws each 3x3 pattern)
+```
 
-1. **Data** `js/custom/blocks.js`: the 3x3 custom blocks as ASCII patterns, same legend as ships:
-   ```js
-   { id: 'corridor', name: 'Corridor', pattern: ['#.#', '#.#', '#.#'] }   // # wall  . empty  E ejector
-   ```
-2. **Model** `js/custom/custom-ship.js`: a 12 x 12 grid that starts full of walls, "stamp a block
-   onto it", and the single generator outside the board (position/facing as data). It outputs a
-   normal grid, so `traceGrid` and the simulation run unchanged.
-3. **UI**: fill the `Custom Ship` tab (`#panel-custom`): a palette of custom blocks plus the board.
-   `BoardView` can already draw it; the normal-ship palette/board panel can be reused or cloned.
-4. **Share link**: a custom ship needs its own code (which block at which slot, plus normal item
-   placements), e.g. `#custom=<code>`.
-5. In `main.js`, `runCalculation()` should simulate whichever grid belongs to the active ship tab.
-   Today it always uses the normal-ship grid.
+How it plugs in:
 
-Perks and skills need nothing: they already apply to whatever grid is simulated.
+* **One board, two modes.** The Normal Ships and Custom Ship tabs share the board panel. `main.js`
+  keeps a single `grid` that always holds the ship of the visible mode; the other mode's grid is
+  parked in `parkedGrids`, so switching tabs keeps both builds. Parts that belong to one mode only
+  carry the classes `ships-only` / `custom-only` (CSS hides them in the other mode).
+* **Clicking:** with a custom block selected, a click fills the slot under the tile; with an item
+  selected it places the item. Right-click / the rotate buttons turn the item on the tile, or the
+  slot's block when the tile has no item. Delete removes the item, or empties the slot.
+* **Changing a slot** keeps items on tiles that stay empty and removes items on tiles that become
+  walls or ejectors.
+* **Share link:** `#custom=<48 hex characters>&build=<items>`. The 48 characters are 16 slots x
+  (block shareId 2 digits + rotation 1 digit). Custom block `shareId`s are permanent, like items.
+* **Not available for custom ships yet:** game-code import/export (it targets normal ships; importing
+  a code switches back to Normal Ships).
+* Perks, skills and captain level apply to the custom ship automatically.
+
+To add a custom block: add one line to `CUSTOM_BLOCKS` with the next free `shareId`. `node --test`
+validates the patterns and ids. Set `rotatable: false` on blocks that cannot be turned in the game.
+
+Open assumptions (all are data in `custom-blocks.js`): the generator sits below the board in column 5
+and fires upward; blocks are rotatable; the custom ship's fire rate is 1.
 
 ## Roadmap: smaller items
 
 * Put captain / skills / perks into share links (so a shared build includes who flies it).
+* Game-code import/export for custom ships, once the game's format for them is known.
 * Show a note when the chart hides a thin tail.

@@ -11,13 +11,18 @@ import { imageUrl } from './assets.js';
 export class Palette {
   #selected = null;
 
-  /** @param {HTMLElement} container */
-  constructor(container) {
+  /**
+   * @param {HTMLElement} container
+   * @param {{ onSelect?: (blockName: string | null) => void }} [options]  called after the user picks or un-picks a block
+   */
+  constructor(container, { onSelect } = {}) {
     this.container = container;
     this.#build();
     container.addEventListener('click', (event) => {
       const button = event.target.closest('.palette-btn');
-      if (button) this.select(button.dataset.block === this.#selected ? null : button.dataset.block);
+      if (!button) return;
+      this.select(button.dataset.block === this.#selected ? null : button.dataset.block);
+      onSelect?.(this.#selected);
     });
   }
 

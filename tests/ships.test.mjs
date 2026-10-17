@@ -70,9 +70,9 @@ test('ship share links: build/parse round-trip', () => {
   assert.equal(buildHash('example-compact', '41030'), '#ship=example-compact&build=41030');
   assert.equal(buildHash('example-compact', ''), '#ship=example-compact');
 
-  assert.deepEqual(parseHash('#build=41030'), { shipId: DEFAULT_SHIP_ID, code: '41030' }); // old links
-  assert.deepEqual(parseHash('#ship=example-compact&build=41030'), { shipId: 'example-compact', code: '41030' });
-  assert.deepEqual(parseHash('#ship=example-compact'), { shipId: 'example-compact', code: '' });
+  assert.deepEqual(parseHash('#build=41030'), { shipId: DEFAULT_SHIP_ID, code: '41030', custom: null }); // old links
+  assert.deepEqual(parseHash('#ship=example-compact&build=41030'), { shipId: 'example-compact', code: '41030', custom: null });
+  assert.deepEqual(parseHash('#ship=example-compact'), { shipId: 'example-compact', code: '', custom: null });
   assert.equal(parseHash(''), null);
   assert.equal(parseHash('#something-else'), null);
 });

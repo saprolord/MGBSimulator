@@ -16,23 +16,29 @@
 
   <nav class="tabs" role="tablist" aria-label="Simulator sections">
     <button type="button" role="tab" class="tab active" id="tab-ships" data-tab="ships" aria-controls="panel-ships" aria-selected="true">Normal Ships</button>
-    <button type="button" role="tab" class="tab" id="tab-custom" data-tab="custom" aria-controls="panel-custom" aria-selected="false" tabindex="-1">Custom Ship</button>
+    <button type="button" role="tab" class="tab" id="tab-custom" data-tab="custom" aria-controls="panel-ships" aria-selected="false" tabindex="-1">Custom Ship</button>
     <button type="button" role="tab" class="tab" id="tab-perks" data-tab="perks" aria-controls="panel-perks" aria-selected="false" tabindex="-1">Perks</button>
     <button type="button" role="tab" class="tab" id="tab-skills" data-tab="skills" aria-controls="panel-skills" aria-selected="false" tabindex="-1">Skills</button>
   </nav>
 
   <main class="app-container">
-    <!-- TAB: NORMAL SHIPS (the board). display: contents keeps palette + board in the main grid. -->
-    <div class="tab-panel panel-board" id="panel-ships" role="tabpanel" aria-labelledby="tab-ships" data-panel="ships">
+    <!-- TABS: NORMAL SHIPS and CUSTOM SHIP share this panel (the board). It gets the class
+         "mode-custom" on the Custom Ship tab, which shows .custom-only and hides .ships-only parts.
+         display: contents keeps palette + board in the main grid. -->
+    <div class="tab-panel panel-board" id="panel-ships" role="tabpanel" aria-labelledby="tab-ships" data-panel="ships custom">
     <!-- LEFT: ITEM PALETTE (buttons are generated from js/blocks.js) -->
     <aside class="palette">
+      <div class="custom-only">
+        <h3>Custom blocks</h3>
+        <div id="custom-palette" class="custom-palette"></div>
+      </div>
       <h3>Items</h3>
       <div id="palette-items"></div>
     </aside>
 
     <!-- CENTER: CANVAS & ACTION BAR -->
     <section class="canvas-area">
-      <div class="ship-row">
+      <div class="ship-row ships-only">
         <label for="ship-select">Ship:</label>
         <select id="ship-select"></select>
       </div>
@@ -63,7 +69,7 @@
         <div class="action-row">
           <button id="btn-share" class="secondary share-btn" title="Copy shareable build link to clipboard">Share Build Link</button>
         </div>
-        <div class="action-row code-row">
+        <div class="action-row code-row ships-only">
           <input type="text" id="game-code-input" placeholder="Paste game ship code" aria-label="Game ship code" autocomplete="off" spellcheck="false">
           <button id="btn-import-code" class="secondary" title="Import the code in the box (or from the clipboard if the box is empty)">Import</button>
           <button id="btn-export-code" class="secondary" title="Copy this build as an in-game ship code">Copy Code</button>
@@ -71,14 +77,6 @@
 
       </div>
     </section>
-    </div>
-
-    <!-- TAB: CUSTOM SHIP (placeholder until the builder exists) -->
-    <div class="tab-panel panel-wide" id="panel-custom" role="tabpanel" aria-labelledby="tab-custom" data-panel="custom" hidden>
-      <h3>Custom Ship</h3>
-      <p class="hint">The custom ship builder is not available yet. The 12x12 board starts full of walls, and
-        3x3 custom blocks (a mix of empty space, walls and ejectors) open up the interior, with the generator just
-        outside the board. Perks and skills already apply to it.</p>
     </div>
 
     <!-- TAB: PERKS (hex map, generated from js/loadout/perks.js) -->

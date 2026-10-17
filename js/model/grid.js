@@ -97,3 +97,6 @@ export function applyPlacements(grid, placements) {
 export function replaceGrid(grid, next) {
   grid.splice(0, grid.length, ...next);
 }
+
+/** A deep copy of a grid (every tile is its own object). */
+export const cloneGrid = (grid) => grid.map((row) => row.map((tile) => ({ ...tile })));

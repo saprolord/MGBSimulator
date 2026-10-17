@@ -6,6 +6,7 @@
  * (a tab bar is a single tab stop; Left/Right/Home/End move between tabs).
  *
  * To add a tab: add a button and a panel in index.html with the same name. Nothing to change here.
+ * A panel can serve several tabs: data-panel="ships custom" (the board is shared by both ship modes).
  */
 
 export class Tabs {
@@ -31,7 +32,7 @@ export class Tabs {
       button.setAttribute('aria-selected', String(isActive));
       button.tabIndex = isActive ? 0 : -1;
     }
-    for (const panel of this.panels) panel.hidden = panel.dataset.panel !== name;
+    for (const panel of this.panels) panel.hidden = !panel.dataset.panel.split(' ').includes(name); // a panel may serve several tabs
     this.onChange?.(name);
   }
 

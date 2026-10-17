@@ -18,34 +18,34 @@
  */
 
 export const DAMAGE_PER_CAPTAIN_LEVEL = 1;
-export const DEFAULT_MAX_CAPTAIN_LEVEL = 100;
+export const DEFAULT_MAX_CAPTAIN_LEVEL = 100000000;
 
 export const CAPTAINS = [
   {
-    id: 'example-gunner',
-    name: 'Example Gunner',
+    id: 'mercury',
+    name: 'Mercury',
     maxLevel: 50,
     skills: [
       {
-        id: 'example-gunner-rapid-fire',
+        id: 'mercury-rapid-fire',
         name: 'Rapid Fire',
         description: '+10% fire rate',
         effects: [{ stat: 'fireRate', op: 'mul', value: 1.1 }],
       },
       {
-        id: 'example-gunner-lucky-shots',
+        id: 'mercury-lucky-shots',
         name: 'Lucky Shots',
         description: 'x2 Damage blocks trigger 5% more often',
         effects: [{ stat: 'x2Chance', op: 'add', value: 0.05 }],
       },
       {
-        id: 'example-gunner-heavy-ammo',
+        id: 'mercury-heavy-ammo',
         name: 'Heavy Ammo',
         description: '+1 base damage',
         effects: [{ stat: 'baseDamage', op: 'add', value: 1 }],
       },
       {
-        id: 'example-gunner-shiny',
+        id: 'mercury-shiny',
         name: 'Shiny Paint',
         description: 'Looks cool, no effect on damage',
         visualOnly: true,
@@ -53,8 +53,8 @@ export const CAPTAINS = [
     ],
   },
   {
-    id: 'example-engineer',
-    name: 'Example Engineer',
+    id: 'venus',
+    name: 'Venus',
     skills: [
       {
         id: 'example-engineer-better-charge',

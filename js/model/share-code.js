@@ -17,6 +17,7 @@
  *     #ship=<shipId>&build=<code>     any ship
  *     #build=<code>                   the default ship (the original, pre-ships link format)
  *     #ship=<shipId>                  a ship with no blocks
+ *     #custom=<layout>&build=<code>   a custom ship (see custom/custom-ship.js) with its items
  */
 
 import { GRID_SIZE, TILE } from '../config.js';
@@ -82,18 +83,22 @@ export function applyLayout(grid, code) {
 
 // ---- URL hash ------------------------------------------------------------------------------
 
-/** The hash for the current ship + build ('' when there is nothing worth sharing). */
-export function buildHash(shipId, code) {
+/**
+ * The hash for the current ship + build ('' when there is nothing worth sharing).
+ * For a custom ship pass `shipId = null` and its layout code as `customCode`.
+ */
+export function buildHash(shipId, code, customCode = '') {
   const parts = [];
-  if (shipId !== DEFAULT_SHIP_ID) parts.push(`ship=${shipId}`);
+  if (customCode) parts.push(`custom=${customCode}`);
+  else if (shipId !== null && shipId !== DEFAULT_SHIP_ID) parts.push(`ship=${shipId}`);
   if (code) parts.push(`build=${code}`);
   return parts.length ? `#${parts.join('&')}` : '';
 }
 
-/** Read a URL hash. Returns { shipId, code } or null if it holds neither a ship nor a build. */
+/** Read a URL hash. Returns { shipId, code, custom } or null if it holds no ship, custom ship or build. */
 export function parseHash(hash) {
   if (!hash.startsWith('#')) return null;
   const params = new URLSearchParams(hash.slice(1));
-  if (!params.has('ship') && !params.has('build')) return null;
-  return { shipId: params.get('ship') ?? DEFAULT_SHIP_ID, code: params.get('build') ?? '' };
+  if (!params.has('ship') && !params.has('build') && !params.has('custom')) return null;
+  return { shipId: params.get('ship') ?? DEFAULT_SHIP_ID, code: params.get('build') ?? '', custom: params.get('custom') };
 }
