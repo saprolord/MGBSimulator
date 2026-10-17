@@ -40,6 +40,13 @@ export class SimPanel {
     this.calcButton.addEventListener('click', onCalculate);
   }
 
+  /** The line under the inputs: what the simulation will really use after captain, skills and perks. */
+  showEffective(text, details = '') {
+    const line = document.getElementById('effective-stats');
+    line.textContent = text;
+    line.title = details;
+  }
+
   /** Put a ship's fire rate in the Fire Rate box (1 -> "1.0", 9.9 -> "9.9"). */
   setFireRate(rate) {
     this.fireRateInput.value = Number.isInteger(rate) ? rate.toFixed(1) : String(rate);

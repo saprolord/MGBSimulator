@@ -1,8 +1,6 @@
 # MGB Damage Simulator
 
-Monte-Carlo damage simulator for Miner Gun Builder. Plain HTML/CSS/JS,
-
-AI was used  heavily for refactor, optimisation and some function upgrade. 
+Monte-Carlo damage simulator for Miner Gun Builder. Plain HTML/CSS/JS, **no build step**.
 
 ## Running it
 
@@ -107,3 +105,10 @@ ship. Switching ship in the UI keeps blocks that still land on empty slots and d
   workers without changing the statistics.
 - The preview and the simulation share each block's `route()`, so they cannot disagree.
 - Tunable game numbers (x2 chance, Charge rates, ...) are named constants at the top of `blocks.js`.
+
+
+## Perks, skills and the custom ship
+
+The page has four tabs: Normal Ships, Custom Ship (placeholder), Perks and Skills. Captain level, skills and perks
+change the numbers the simulation runs with, for every ship mode. Data lives in `js/loadout/` and `js/tuning.js`.
+See **docs/ARCHITECTURE.md** for how it fits together, recipes for adding things, and the plan for the custom ship.

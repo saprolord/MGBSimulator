@@ -9,5 +9,5 @@ export { runSimulation } from './runner.js';
 /** Path preview for the canvas: array of paths, each an array of { r, c }. */
 export function traceGrid(grid) {
   const ship = compileShip(grid);
-  return pathsToCoordinates(traceShip(ship), ship.size);
+  return pathsToCoordinates(traceShip(ship), ship.cols);
 }

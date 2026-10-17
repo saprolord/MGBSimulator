@@ -11,10 +11,19 @@
 </head>
 <body>
   <header>
-    <h1>MGB Damage Simulator v1.0</h1>
+    <h1>MGB Damage Simulator v0.9</h1>
   </header>
 
+  <nav class="tabs" role="tablist" aria-label="Simulator sections">
+    <button type="button" role="tab" class="tab active" id="tab-ships" data-tab="ships" aria-controls="panel-ships" aria-selected="true">Normal Ships</button>
+    <button type="button" role="tab" class="tab" id="tab-custom" data-tab="custom" aria-controls="panel-custom" aria-selected="false" tabindex="-1">Custom Ship</button>
+    <button type="button" role="tab" class="tab" id="tab-perks" data-tab="perks" aria-controls="panel-perks" aria-selected="false" tabindex="-1">Perks</button>
+    <button type="button" role="tab" class="tab" id="tab-skills" data-tab="skills" aria-controls="panel-skills" aria-selected="false" tabindex="-1">Skills</button>
+  </nav>
+
   <main class="app-container">
+    <!-- TAB: NORMAL SHIPS (the board). display: contents keeps palette + board in the main grid. -->
+    <div class="tab-panel panel-board" id="panel-ships" role="tabpanel" aria-labelledby="tab-ships" data-panel="ships">
     <!-- LEFT: ITEM PALETTE (buttons are generated from js/blocks.js) -->
     <aside class="palette">
       <h3>Items</h3>
@@ -62,8 +71,35 @@
 
       </div>
     </section>
+    </div>
 
-    <!-- RIGHT: STATS & CALCULATION -->
+    <!-- TAB: CUSTOM SHIP (placeholder until the builder exists) -->
+    <div class="tab-panel panel-wide" id="panel-custom" role="tabpanel" aria-labelledby="tab-custom" data-panel="custom" hidden>
+      <h3>Custom Ship</h3>
+      <p class="hint">The custom ship builder is not available yet. The 12x12 board starts full of walls, and
+        3x3 custom blocks (a mix of empty space, walls and ejectors) open up the interior, with the generator just
+        outside the board. Perks and skills already apply to it.</p>
+    </div>
+
+    <!-- TAB: PERKS (hex map, generated from js/loadout/perks.js) -->
+    <div class="tab-panel panel-wide" id="panel-perks" role="tabpanel" aria-labelledby="tab-perks" data-panel="perks" hidden>
+      <div class="perks-header">
+        <h3>Perks</h3>
+        <span id="perk-points" class="perk-points"></span>
+        <button type="button" id="btn-perks-reset" class="secondary">Reset perks</button>
+      </div>
+      <p class="hint">Click a highlighted perk to unlock it, click an unlocked perk to refund it. Dashed perks have no
+        effect on damage. Perks apply to every ship mode.</p>
+      <div id="perk-map" class="perk-map"></div>
+    </div>
+
+    <!-- TAB: SKILLS (generated from js/loadout/captains.js) -->
+    <div class="tab-panel panel-wide" id="panel-skills" role="tabpanel" aria-labelledby="tab-skills" data-panel="skills" hidden>
+      <h3>Captain &amp; Skills</h3>
+      <div id="skills-view" class="skills-view"></div>
+    </div>
+
+    <!-- RIGHT: STATS & CALCULATION (always visible, whichever tab is open) -->
     <section class="results-panel">
       <div class="calc-header">
         <h3>Damage Analysis</h3>
@@ -79,6 +115,8 @@
           <input type="number" id="fireRateInput" min="0.1" step="0.1" value="1.0" placeholder="e.g. 1.0">
         </div>
       </div>
+
+      <p id="effective-stats" class="effective-stats" aria-live="polite"></p>
 
       <!-- Grey card holding the simulation controls and, below them, the results.
            (In v0.8 this <div> was never closed, so the browser wrapped everything below the
