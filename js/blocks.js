@@ -66,9 +66,14 @@ export const ABSORB = -1;
 // ---------------------------------------------------------------------------
 const forward = (v, out) => out.emit(v.heading);
 
-const guidedBoost = (v, sim) => (v.turnActive ? v.damage * sim.tuning.guidedTurnBonus : v.damage);
+const guidedBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus) : (v.damage));
+const turnLeftBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus + sim.tuning.turnLeftDamage) : 
+(v.damage+sim.tuning.turnLeftDamage));
+const turnRightBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus + sim.tuning.turnRightDamage) : 
+(v.damage+sim.tuning.turnRightDamage));
 /** Effect that adds the tuning value `key` to the damage. */
 const addTuned = (key) => (v, sim) => v.damage + sim.tuning[key];
+const multTuned = (key) => (v, sim) => v.damage * sim.tuning[key];
 
 function define(spec) {
   return Object.freeze({
@@ -91,12 +96,12 @@ export const BLOCKS = Object.freeze([
   // ---- Direction blocks ---------------------------------------------------
   define({
     name: 'Guide Right', shareId: 0x00, image: 'Right_turn.webp', directional: true,
-    effect: guidedBoost,
+    effect: turnRightBoost,
     route: (v, out) => out.emit(right(v.rot)),
   }),
   define({
     name: 'Guide Left', shareId: 0x01, image: 'Left_turn.webp', directional: true,
-    effect: guidedBoost,
+    effect: turnLeftBoost,
     route: (v, out) => out.emit(left(v.rot)),
   }),
   define({
@@ -287,7 +292,18 @@ export const BLOCKS = Object.freeze([
     // projectiles (the back). Projectiles that run into it directly are swallowed.
     name: 'Output Portal', shareId: 0x34, image: 'Output Portal.jpg',directional: true, maxPerShip: 1, portal: 'out',
     route: () => {},
+  }),  
+  define({
+    name: 'Curve Right', shareId: 0x1c, image: 'Curve_right.webp',
+    effect: multTuned('curveRightDamage'),     
+    route: forward,
+  }), 
+  define({
+    name: 'Curve Left', shareId: 0x1b, image: 'Curve_left.webp',     
+    route: forward,
+    effect: multTuned('curveLeftDamage'),
   }),
+
 
   // ---- Visual-only blocks (kept for completeness and for copy/pasting ships) -------------
   visualOnly('Speed Up', 0x15, 'More_speed.webp'),
@@ -296,8 +312,8 @@ export const BLOCKS = Object.freeze([
   visualOnly('Spread Right', 0x18, 'Eject_to_the_right.webp'),
   visualOnly('Large Spread', 0x19, 'Eject_randomly.webp'),
   visualOnly('Small Spread', 0x1a, 'Eject_narrow.webp'),
-  visualOnly('Curve Left', 0x1b, 'Curve_left.webp'),
-  visualOnly('Curve Right', 0x1c, 'Curve_right.webp'),
+  //visualOnly('Curve Left', 0x1b, 'Curve_left.webp'),
+  //visualOnly('Curve Right', 0x1c, 'Curve_right.webp'),
   visualOnly('Random Curve', 0x1d, 'Curve_randomly.webp'),
   visualOnly('Return Bounce', 0x1e, 'Bounce_back.webp'),
   visualOnly('Random Bounce', 0x1f, 'Bounce_randomly.webp'),

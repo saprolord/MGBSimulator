@@ -34,6 +34,12 @@ export const DEFAULT_TUNING = Object.freeze({
   // ---- Faction rounds (Thermite / Charged / Plutonium)
   factionChance: 0.45,
   factionMultiplier: 2.6,
+
+  // ---- Non damage block (upgradable through perks and skils)
+  turnRightDamage: 0,   // damage addition
+  turnLeftDamage: 0,    // damage addition
+  curveRightDamage: 1,  // damage multiplication
+  curveLeftDamage: 1,   // damage multiplication
 });
 
 export const isTuningKey = (key) => Object.hasOwn(DEFAULT_TUNING, key);

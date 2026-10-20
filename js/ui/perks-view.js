@@ -13,6 +13,7 @@ import { imageUrl } from './assets.js';
 const SVG = 'http://www.w3.org/2000/svg';
 const HEX_RADIUS = 30; // centre to corner, in SVG units
 const PADDING = 12;
+const SPACING = 1.5 //"Gap" from the hex to hex shape. 1 = no gaps. 2 = gap of one hex
 const SQRT3 = Math.sqrt(3);
 
 const svgElement = (tag, attributes = {}) => {
@@ -22,11 +23,11 @@ const svgElement = (tag, attributes = {}) => {
 };
 
 /** Centre of a pointy-top hex from its axial coordinates. */
-const hexCentre = (q, r) => ({ x: HEX_RADIUS * SQRT3 * (q + r / 2), y: HEX_RADIUS * 1.5 * r });
+const hexCentre = (q, r) => ({ x: HEX_RADIUS*1.5*r*SPACING,  y: HEX_RADIUS * SQRT3 * (q + r / 2) *SPACING});
 
 const hexPoints = (cx, cy) =>
   Array.from({ length: 6 }, (_, i) => {
-    const angle = (Math.PI / 180) * (60 * i - 30);
+    const angle = (Math.PI / 180) * (60 * i );
     return `${(cx + HEX_RADIUS * Math.cos(angle)).toFixed(1)},${(cy + HEX_RADIUS * Math.sin(angle)).toFixed(1)}`;
   }).join(' ');
 

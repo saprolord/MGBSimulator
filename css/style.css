@@ -13,7 +13,11 @@
   --border: #444;
   --border-strong: #555;
   --accent: #007acc;
-  --accent-hover: #0094f0;
+  --accent-hover: #0094f0;  --border: #444;
+  --perk_border: #444;
+  --perk_border-strong: #555;
+  --perk_accent: #7d7d7d;
+  --perk_accent-hover: #ff8800;
   --success: #4caf50;
   --success-bg: #1e3a1e;
   --text: #fff;
@@ -722,12 +726,12 @@ canvas#chart-canvas {
 }
 
 .perk-link {
-  stroke: var(--border-strong);
-  stroke-width: 3;
+  stroke: var(--perk_border-strong);
+  stroke-width: 5;
 }
 
 .perk-link.active {
-  stroke: var(--accent);
+  stroke: var(--perk_accent-hover);
 }
 
 .perk-hex {
@@ -737,7 +741,7 @@ canvas#chart-canvas {
 
 .perk-hex polygon {
   fill: var(--surface-raised);
-  stroke: var(--border);
+  stroke: var(--perk_border);
   stroke-width: 2;
   transition: fill var(--transition), stroke var(--transition);
 }
@@ -752,8 +756,8 @@ canvas#chart-canvas {
 }
 
 .perk-hex.available polygon {
-  stroke: var(--accent);
-  stroke-width: 3;
+  stroke: var(--perk_accent);
+  stroke-width: 4;
 }
 
 .perk-hex.available text {
@@ -766,8 +770,9 @@ canvas#chart-canvas {
 }
 
 .perk-hex.unlocked polygon {
-  fill: var(--accent);
-  stroke: var(--accent-hover);
+  fill: var(--perk_accent);
+  stroke: var(--perk_accent-hover);
+  stroke-width: 3;
 }
 
 .perk-hex.unlocked text {
@@ -775,7 +780,7 @@ canvas#chart-canvas {
 }
 
 .perk-hex.locked {
-  opacity: 0.55;
+  opacity: 1;
   cursor: not-allowed;
 }
 
