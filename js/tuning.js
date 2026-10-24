@@ -20,6 +20,9 @@ export const DEFAULT_TUNING = Object.freeze({
   x2Multiplier: 2, //              ...by this
   x10Chance: 0.04, // "x10 Damage": chance to multiply...
   x10Multiplier: 10, //             ...by this
+  
+  //Random Damage table
+  Random_Damage_Table: [[1,0],[10,1],[11,2],[12,3],[13,4]],
 
   // ---- Special damage blocks
   chargeBonusRate: 0.1, // Charge: bonus damage = this share of the stored charge
@@ -30,6 +33,7 @@ export const DEFAULT_TUNING = Object.freeze({
   combineCount: 10, // Combine 10: releases every Nth projectile...
   combineMultiplier: 2, //          ...carrying the sum of all of them times this
   stockpileRate: 0.1, // Damage Stockpile: + this share of damage per empty tile
+  comebackMultiplier: 4, //Multiply damage by 4 if it is less than the previous projectile
 
   // ---- Faction rounds (Thermite / Charged / Plutonium)
   factionChance: 0.45,

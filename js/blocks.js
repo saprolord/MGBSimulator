@@ -66,11 +66,8 @@ export const ABSORB = -1;
 // ---------------------------------------------------------------------------
 const forward = (v, out) => out.emit(v.heading);
 
+/** Damage from "Guided Damage" legendary block for the whole ship. Add to blocks concerned */
 const guidedBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus) : (v.damage));
-const turnLeftBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus + sim.tuning.turnLeftDamage) : 
-(v.damage+sim.tuning.turnLeftDamage));
-const turnRightBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus + sim.tuning.turnRightDamage) : 
-(v.damage+sim.tuning.turnRightDamage));
 /** Effect that adds the tuning value `key` to the damage. */
 const addTuned = (key) => (v, sim) => v.damage + sim.tuning[key];
 const multTuned = (key) => (v, sim) => v.damage * sim.tuning[key];
@@ -96,12 +93,12 @@ export const BLOCKS = Object.freeze([
   // ---- Direction blocks ---------------------------------------------------
   define({
     name: 'Guide Right', shareId: 0x00, image: 'Right_turn.webp', directional: true,
-    effect: turnRightBoost,
+    effect: (v, sim) => (guidedBoost(v,sim) + sim.tuning.turnRightDamage),
     route: (v, out) => out.emit(right(v.rot)),
   }),
   define({
     name: 'Guide Left', shareId: 0x01, image: 'Left_turn.webp', directional: true,
-    effect: turnLeftBoost,
+    effect: (v, sim) => (guidedBoost(v,sim) + sim.tuning.turnLeftDamage),
     route: (v, out) => out.emit(left(v.rot)),
   }),
   define({
@@ -147,11 +144,11 @@ export const BLOCKS = Object.freeze([
   define({
     name: 'Random Damage', shareId: 0x0a, image: 'Gamble_damage.webp',
     effect: (v, sim) => {
-      const roll = sim.rng() * 13;
+      const roll = sim.rng() * sim.tuning.Random_Damage_Table[(sim.tuning.Random_Damage_Table).length-1][0];
       for (const [limit, multiplier] of sim.tuning.Random_Damage_Table) {
         if (roll < limit) return v.damage * multiplier;
       }
-      return v.damage * RANDOM_DAMAGE_TABLE[RANDOM_DAMAGE_TABLE.length - 1][1];
+      return v.damage * sim.tuning.Random_Damage_Table[sim.tuning.Random_Damage_Table.length - 1][1];
     },
     route: forward,
   }),
@@ -213,7 +210,7 @@ export const BLOCKS = Object.freeze([
     effect: (v, sim) => {
       const previous = sim.lastDamage[v.cell]; // -1 = nothing has passed yet
       sim.lastDamage[v.cell] = v.damage;
-      return previous >= 0 && v.damage < previous ? v.damage * 4 : v.damage;
+      return previous >= 0 && v.damage < previous ? v.damage * sim.tuning.comebackMultiplier : v.damage;
     },
     route: forward,
   }),
