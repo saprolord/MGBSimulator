@@ -54,6 +54,7 @@ export class TrialRunner {
     this.lastDamage = new Float64Array(n).fill(-1);
     this.accCount = new Int32Array(n);
     this.accDamage = new Float64Array(n);
+    this.accLast = new Float64Array(n).fill(-1); // damage of the last projectile that entered (-1 = none yet)
 
     // Damage Cross tickets (cleared after every shot).
     this.crossRecords = new Map();
@@ -65,11 +66,12 @@ export class TrialRunner {
     this.qDamage = new Float64Array(QUEUE_CAPACITY);
     this.qOriginal = new Uint8Array(QUEUE_CAPACITY);
     this.qTurn = new Uint8Array(QUEUE_CAPACITY);
+    this.qDistance = new Int32Array(QUEUE_CAPACITY); // tiles travelled since the generator
     this.qStamps = new Array(QUEUE_CAPACITY).fill(null);
     this.tail = 0;
 
     // The projectile currently entering a block; reused for every visit (see blocks.js).
-    this.visit = { cell: 0, heading: 0, rot: 0, damage: 0, original: 1, turnActive: 0, stamps: null, ship };
+    this.visit = { cell: 0, heading: 0, rot: 0, damage: 0, original: 1, turnActive: 0, stamps: null, distance: 0, ship, tuning: params.tuning };
   }
 
   // ---- `out` interface used by blocks' route() -------------------------------------------
@@ -87,6 +89,15 @@ export class TrialRunner {
   /** Release the projectile from a DIFFERENT tile (teleport). It leaves `cell` travelling `heading`. */
   emitAt(cell, heading) {
     this.#push(cell, heading, this.visit.original);
+  }
+
+  /**
+   * "Does this happen?" for a block that has a chance. Draws NO random number when the chance is 0,
+   * so a chance that is switched off never disturbs the random sequence.
+   * (In the path preview this is always false, see engine/trace.js.)
+   */
+  roll(probability) {
+    return probability > 0 && this.rng() < probability;
   }
 
   /** Release exactly one projectile, heading chosen uniformly from the given headings. */
@@ -109,6 +120,7 @@ export class TrialRunner {
     this.qOriginal[t] = original;
     this.qTurn[t] = v.turnActive;
     this.qStamps[t] = v.stamps;
+    this.qDistance[t] = v.distance;
     this.tail = t + 1;
   }
 
@@ -126,8 +138,9 @@ export class TrialRunner {
   /** Fire one projectile from the generator and follow everything it spawns. */
   runShot(startDamage) {
     const { kind, rot, block, next, emitter } = this.ship;
-    const { qCell, qHeading, qDamage, qOriginal, qTurn, qStamps, visit } = this;
+    const { qCell, qHeading, qDamage, qOriginal, qTurn, qStamps, qDistance, visit } = this;
     const maxSteps = ENGINE_LIMITS.maxProjectileSteps;
+    const emptySlotDamage = this.tuning.emptySlotDamage; // perk: flat damage for each empty slot crossed
 
     this.crossRecords.clear();
     qCell[0] = emitter.cell;
@@ -136,6 +149,7 @@ export class TrialRunner {
     qOriginal[0] = 1;
     qTurn[0] = 0;
     qStamps[0] = null;
+    qDistance[0] = 0;
     this.tail = 1;
 
     let head = 0;
@@ -148,6 +162,7 @@ export class TrialRunner {
       const heading = qHeading[i];
       const cell = next[qCell[i] * 4 + heading];
       if (cell < 0) continue; // flew off the grid
+      const distance = qDistance[i] + 1; // the tile it is entering is this far from the generator
 
       const cellKind = kind[cell];
 
@@ -156,10 +171,11 @@ export class TrialRunner {
         const t = this.tail++;
         qCell[t] = cell;
         qHeading[t] = heading;
-        qDamage[t] = qDamage[i];
+        qDamage[t] = qDamage[i] + emptySlotDamage;
         qOriginal[t] = qOriginal[i];
         qTurn[t] = qTurn[i];
         qStamps[t] = qStamps[i];
+        qDistance[t] = distance;
       } else if (cellKind === EJECTOR) {
         ejected += qDamage[i] * this.ejectionMultiplier;
       } else if (cellKind === BLOCK) {
@@ -174,6 +190,7 @@ export class TrialRunner {
         visit.original = qOriginal[i];
         visit.turnActive = qTurn[i];
         visit.stamps = qStamps[i];
+        visit.distance = distance;
 
         if (def.effect !== null) {
           const damage = def.effect(visit, this);

@@ -43,6 +43,8 @@
  *   out.emitAt(cell, heading) teleport: release the projectile from another tile
 
  *   out.emitOneOf(a, b[, c])  simulation: pick ONE heading at random; path preview: show them all
+ *   out.roll(p)               true with probability p (a chance a perk can raise). Always false in the
+ *                             path preview. Draws no random number when p is 0.
  *
  * THE `sim` OBJECT - simulation state (see engine/trial.js)
  *   sim.rng(), sim.tuning.<key> (rule numbers, see tuning.js), sim.maxTier, sim.unusedEjectors, and per-tile memory that persists across trials:
@@ -68,6 +70,8 @@ const forward = (v, out) => out.emit(v.heading);
 
 /** Damage from "Guided Damage" legendary block for the whole ship. Add to blocks concerned */
 const guidedBoost = (v, sim) => (v.turnActive ? (v.damage * sim.tuning.guidedTurnBonus) : (v.damage));
+/** Same boost for the splitters, but only when the 'All Guides Damage' perk is on (guidedAllGuides = 1). */
+const guidedBoostAllGuides = (v, sim) => (sim.tuning.guidedAllGuides && v.turnActive ? v.damage * sim.tuning.guidedTurnBonus : v.damage);
 /** Effect that adds the tuning value `key` to the damage. */
 const addTuned = (key) => (v, sim) => v.damage + sim.tuning[key];
 const multTuned = (key) => (v, sim) => v.damage * sim.tuning[key];
@@ -80,6 +84,16 @@ function define(spec) {
     effect: null,
     ...spec,
   });
+}
+
+/** One draw from the Random Damage table: the multiplier to apply (see tuning.Random_Damage_Table). */
+function drawRandomMultiplier(sim) {
+  const table = sim.tuning.Random_Damage_Table; // [[cumulative limit, multiplier], ...]
+  const roll = sim.rng() * table[table.length - 1][0];
+  for (const [limit, multiplier] of table) {
+    if (roll < limit) return multiplier;
+  }
+  return table[table.length - 1][1];
 }
 
 /** A block that exists in the game but does not change the damage maths (yet). */
@@ -103,6 +117,7 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: '2-Way Split', shareId: 0x02, image: 'Split_sides.webp', directional: true,
+    effect: guidedBoostAllGuides,
     route: (v, out) => {
       out.emit(left(v.rot));
       out.emit(right(v.rot));
@@ -110,6 +125,7 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: '3-way Split', shareId: 0x06, image: 'Split_all.webp', directional: true,
+    effect: guidedBoostAllGuides,
     route: (v, out) => {
       out.emit(left(v.rot));
       out.emit(v.rot);
@@ -120,7 +136,10 @@ export const BLOCKS = Object.freeze([
   // ---- Damage / projectile modifiers --------------------------------------
   define({
     name: 'Add 1 Damage', shareId: 0x03, image: 'More_damage.webp',
-    effect: addTuned('addDamageSmall'),
+    // + addDamageSmall, and (with the perk) + addSmallPerBlock for EVERY Add 1 Damage block on the ship
+    // (this one included, whether or not the others are on the projectile's path).
+    effect: (v, sim) =>
+      v.damage + sim.tuning.addDamageSmall + sim.tuning.addSmallPerBlock * (v.ship.blockCounts['Add 1 Damage'] ?? 0),
     route: forward,
   }),
   define({
@@ -128,7 +147,9 @@ export const BLOCKS = Object.freeze([
     // The original projectile is duplicated; duplicates pass through untouched.
     route: (v, out) => {
       out.emit(v.heading);
-      if (v.original) out.emitCopy(v.heading);
+      // The original is always duplicated. A copy normally passes through, but with the
+      // "Duplicate" perk it is duplicated too (a chance of duplicateChance).
+      if (v.original || out.roll(v.tuning.duplicateChance)) out.emitCopy(v.heading);
     },
   }),
   define({
@@ -144,11 +165,9 @@ export const BLOCKS = Object.freeze([
   define({
     name: 'Random Damage', shareId: 0x0a, image: 'Gamble_damage.webp',
     effect: (v, sim) => {
-      const roll = sim.rng() * sim.tuning.Random_Damage_Table[(sim.tuning.Random_Damage_Table).length-1][0];
-      for (const [limit, multiplier] of sim.tuning.Random_Damage_Table) {
-        if (roll < limit) return v.damage * multiplier;
-      }
-      return v.damage * sim.tuning.Random_Damage_Table[sim.tuning.Random_Damage_Table.length - 1][1];
+      let multiplier = drawRandomMultiplier(sim);
+      if (multiplier === 0 && sim.tuning.randomRerollZero) multiplier = drawRandomMultiplier(sim); // perk: one reroll
+      return v.damage * multiplier * sim.tuning.randomMultiplierScale;
     },
     route: forward,
   }),
@@ -176,7 +195,7 @@ export const BLOCKS = Object.freeze([
       if (v.heading === v.rot) {
         const ticket = v.stamps !== null ? v.stamps[v.cell] : undefined;
         const recorded = ticket !== undefined ? sim.crossRecords.get(ticket) : undefined;
-        return recorded !== undefined ? v.damage + recorded : v.damage;
+        return recorded !== undefined ? v.damage + recorded * v.tuning.damageCrossMultiplier : v.damage;
       }
       if (v.heading === opposite(v.rot)) return ABSORB; // entering through the exit is blocked
       const ticket = ++sim.crossCounter;
@@ -191,13 +210,29 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: '2-Way Random Split', shareId: 0x07, image: 'Random_double.webp', directional: true,
-    effect: (v) => v.damage * 2,
-    route: (v, out) => out.emitOneOf(left(v.rot), right(v.rot)),
+    effect: (v, sim) => guidedBoostAllGuides(v, sim) * sim.tuning.x2SplitDamage,
+    // Normally ONE of the two sides, chosen at random. With the perk, sometimes BOTH (full damage on each).
+    route: (v, out) => {
+      if (out.roll(v.tuning.twoWaySplitChance)) {
+        out.emit(left(v.rot));
+        out.emit(right(v.rot));
+      } else {
+        out.emitOneOf(left(v.rot), right(v.rot));
+      }
+    },
   }),
   define({
     name: '3-Way Random Split', shareId: 0x08, image: 'Random_triple.webp', directional: true,
-    effect: (v) => v.damage * 3,
-    route: (v, out) => out.emitOneOf(left(v.rot), v.rot, right(v.rot)),
+    effect: (v, sim) => guidedBoostAllGuides(v, sim) * sim.tuning.x3SplitDamage,
+    route: (v, out) => {
+      if (out.roll(v.tuning.threeWaySplitChance)) {
+        out.emit(left(v.rot));
+        out.emit(v.rot);
+        out.emit(right(v.rot));
+      } else {
+        out.emitOneOf(left(v.rot), v.rot, right(v.rot));
+      }
+    },
   }),
   define({
     name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp', maxPerShip: 1,
@@ -224,8 +259,12 @@ export const BLOCKS = Object.freeze([
     name: 'Combine 10', shareId: 0x10, image: 'Accumulator.webp', maxPerShip: 1,
     effect: (v, sim) => {
       const i = v.cell;
+      // Perk: each projectile counts as the higher of its own damage and the previous projectile's.
+      const previous = sim.accLast[i];
+      sim.accLast[i] = v.damage;
+      const counted = sim.tuning.accumulatorUsesHigher && previous > v.damage ? previous : v.damage;
       sim.accCount[i]++;
-      sim.accDamage[i] += v.damage;
+      sim.accDamage[i] += counted;
       if (sim.accCount[i] < sim.tuning.combineCount) return ABSORB;
       const combined = sim.accDamage[i] * sim.tuning.combineMultiplier;
       sim.accCount[i] = 0;
@@ -234,6 +273,7 @@ export const BLOCKS = Object.freeze([
     },
     route: forward,
   }),
+
   define({
     // After this block every turn block boosts the projectile (see guidedBoost).
     name: 'Guided Damage', shareId: 0x13, image: 'Turn_damage.webp', maxPerShip: 1,
@@ -245,7 +285,8 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp', maxPerShip: 1,
-    effect: addTuned('addDamageLarge'),
+    // + addDamageLarge, and (with the perk) + addLargePerTile for every tile travelled since the generator.
+    effect: (v, sim) => v.damage + sim.tuning.addDamageLarge + sim.tuning.addLargePerTile * v.distance,
     route: forward,
   }),
   define({
@@ -258,6 +299,7 @@ export const BLOCKS = Object.freeze([
     route: (v, out) => {
       out.emit(v.heading);
       out.emitCopy(v.heading);
+      if (out.roll(v.tuning.cloneExtraChance)) out.emitCopy(v.heading); // perk: sometimes a second copy
     },
   }),
   define({

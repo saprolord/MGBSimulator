@@ -20,6 +20,8 @@ export const DEFAULT_TUNING = Object.freeze({
   x2Multiplier: 2, //              ...by this
   x10Chance: 0.04, // "x10 Damage": chance to multiply...
   x10Multiplier: 10, //             ...by this
+  x2SplitDamage: 2, // Damagemultiplier for 2 way random split
+  x3SplitDamage: 3, // Damagemultiplier for 2 way random split
   
   //Random Damage table
   Random_Damage_Table: [[1,0],[10,1],[11,2],[12,3],[13,4]],
@@ -34,6 +36,20 @@ export const DEFAULT_TUNING = Object.freeze({
   combineMultiplier: 2, //          ...carrying the sum of all of them times this
   stockpileRate: 0.1, // Damage Stockpile: + this share of damage per empty tile
   comebackMultiplier: 4, //Multiply damage by 4 if it is less than the previous projectile
+  damageCrossMultiplier: 1, //Muliply the damage recorded
+
+  // ---- Perk-driven extras (all "off" by default, so they change nothing until a perk turns them on)
+  cloneExtraChance: 0, // Clone: chance of one more copy (3 projectiles instead of 2)
+  addLargePerTile: 0, // Add 100 Damage: + this x (tiles travelled from the generator to the block)
+  randomRerollZero: 0, // Random Damage: 1 = a roll of x0 is rerolled once
+  randomMultiplierScale: 1, // Random Damage: every multiplier is multiplied by this (0.85 = -15 %)
+  twoWaySplitChance: 0, //Chance of splitting the path in two with full damage
+  threeWaySplitChance: 0, //Chance of splitting the path in three with full damage
+  duplicateChance: 0, //Chance of duplicate a copied bullet
+  addSmallPerBlock: 0, // Add 1 Damage: + this x (number of Add 1 Damage blocks on the whole ship, itself included)
+  guidedAllGuides: 0, // Guided Damage: 1 = the splitters boost damage too (not only the turn blocks)
+  accumulatorUsesHigher: 0, // Combine 10: 1 = each projectile counts as the higher of its damage and the previous one's
+  emptySlotDamage: 0, // + this flat damage for every empty slot a projectile crosses on its way
 
   // ---- Faction rounds (Thermite / Charged / Plutonium)
   factionChance: 0.45,

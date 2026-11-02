@@ -8,7 +8,7 @@ import { checkEffect } from './effects.js';
 
 export function validateData({ captains, perks, maxPerkPoints }) {
   const problems = [];
-  const ID = /^[a-z0-9_-]+$/;
+  const ID = /^[^\s"'\\\[\]]+$/; // any characters except whitespace, quotes, backslash and brackets
 
   const checkEffects = (where, effects) => {
     for (const effect of effects ?? []) {
@@ -20,14 +20,14 @@ export function validateData({ captains, perks, maxPerkPoints }) {
   // ---- Captains and skills
   const ids = new Set();
   for (const captain of captains) {
-    if (!ID.test(captain.id ?? '')) problems.push(`Captain "${captain.id}": id must be lowercase letters, digits, - or _`);
+    if (!ID.test(captain.id ?? '')) problems.push(`Captain "${captain.id}": id must not contain spaces, quotes, backslashes or brackets`);
     if (ids.has(captain.id)) problems.push(`Duplicate id "${captain.id}"`);
     ids.add(captain.id);
     if (captain.maxLevel !== undefined && !(Number.isInteger(captain.maxLevel) && captain.maxLevel >= 0)) {
       problems.push(`Captain "${captain.id}": maxLevel must be a whole number, 0 or more`);
     }
     for (const skill of captain.skills ?? []) {
-      if (!ID.test(skill.id ?? '')) problems.push(`Skill "${skill.id}": id must be lowercase letters, digits, - or _`);
+      if (!ID.test(skill.id ?? '')) problems.push(`Skill "${skill.id}": id must not contain spaces, quotes, backslashes or brackets`);
       if (ids.has(skill.id)) problems.push(`Duplicate id "${skill.id}"`);
       ids.add(skill.id);
       if (skill.visualOnly && skill.effects?.length) problems.push(`Skill "${skill.id}": visualOnly skills must not have effects`);
@@ -39,7 +39,7 @@ export function validateData({ captains, perks, maxPerkPoints }) {
   const perkIds = new Set();
   const positions = new Map();
   for (const perk of perks) {
-    if (!ID.test(perk.id ?? '')) problems.push(`Perk "${perk.id}": id must be lowercase letters, digits, - or _`);
+    if (!ID.test(perk.id ?? '')) problems.push(`Perk "${perk.id}": id must not contain spaces, quotes, backslashes or brackets`);
     if (perkIds.has(perk.id)) problems.push(`Duplicate perk id "${perk.id}"`);
     perkIds.add(perk.id);
 
