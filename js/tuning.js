@@ -49,6 +49,8 @@ export const DEFAULT_TUNING = Object.freeze({
   addSmallPerBlock: 0, // Add 1 Damage: + this x (number of Add 1 Damage blocks on the whole ship, itself included)
   guidedAllGuides: 0, // Guided Damage: 1 = the splitters boost damage too (not only the turn blocks)
   accumulatorUsesHigher: 0, // Combine 10: 1 = each projectile counts as the higher of its damage and the previous one's
+  legendaryCountsAsEmpty: 0, // 1 = legendary blocks count as unused slots (Damage Stockpile bonus, empty-slot damage)
+  guidesCountAsEmpty: 0, // 1 = direction guides count as unused slots (same)
   emptySlotDamage: 0, // + this flat damage for every empty slot a projectile crosses on its way
 
   // ---- Faction rounds (Thermite / Charged / Plutonium)

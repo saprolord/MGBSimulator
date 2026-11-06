@@ -34,6 +34,8 @@ export function compileShip(grid) {
   const ejectors = [];
   let emptyCount = 0;
   let hasStockpile = false;
+  let legendaryCount = 0; // legendary blocks on the ship
+  let guideCount = 0; // direction guides on the ship
   const blockCounts = {}; // block name -> how many are on the ship (anywhere, on the path or not)
   let portalOut = null; // { cell, heading } of the output portal (at most one is used)
 
@@ -50,6 +52,8 @@ export function compileShip(grid) {
             rot[cell] = fromDegrees(tile.rotation);
             if (tile.block === 'Damage Stockpile') hasStockpile = true;
             blockCounts[tile.block] = (blockCounts[tile.block] ?? 0) + 1;
+            if (block[cell]?.legendary) legendaryCount++;
+            if (block[cell]?.guide) guideCount++;
             if (block[cell]?.portal === 'out' && portalOut === null) portalOut = { cell, heading: rot[cell] };
           } else {
             kind[cell] = KIND.FREE;
@@ -79,8 +83,18 @@ export function compileShip(grid) {
     }
   }
 
-  return { rows, cols, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile, portalOut, blockCounts };
+  return { rows, cols, cellCount, kind, rot, block, next, emitter, ejectors, emptyCount, hasStockpile, portalOut, blockCounts, legendaryCount, guideCount };
 }
 
-/** Damage Stockpile: + `rate` (10 %) damage for every empty tile, applied when the projectile is ejected. */
-export const unusedDamageBonus = (ship, rate) => (ship.hasStockpile ? ship.emptyCount * rate : 0);
+/**
+ * Damage Stockpile: + `stockpileRate` (10 %) damage for every unused slot, applied when the projectile is
+ * ejected. Unused slots are the empty tiles, plus (with the perks) the legendary blocks and/or the guides.
+ */
+export function unusedDamageBonus(ship, tuning) {
+  if (!ship.hasStockpile) return 0;
+  const unused =
+    ship.emptyCount +
+    (tuning.legendaryCountsAsEmpty ? ship.legendaryCount : 0) +
+    (tuning.guidesCountAsEmpty ? ship.guideCount : 0);
+  return unused * tuning.stockpileRate;
+}

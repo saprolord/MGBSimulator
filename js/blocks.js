@@ -18,6 +18,8 @@
  *   implemented     false => drawn greyed-out in the UI ("visual only").
  *   maxPerShip      (optional) most copies allowed on one ship. Enforced when placing / loading.
  *   portal          (optional) 'in' | 'out'. Marks the teleporter pair (see engine/ship.js).
+ *   legendary       true for the legendary (one-per-ship) blocks. Used by the 'Empty Legendary' perk.
+ *   guide           true for the projectile direction guides (turns and splits). Used by 'Empty Directional'.
  *   acceptsAnyEntry false => projectiles are only accepted when travelling in the block's facing
  *                   direction; anything else stops. (Only Damage Cross is more permissive.)
  *   route(v, out)   WHERE does the projectile go? Called by BOTH the path preview and the
@@ -79,6 +81,8 @@ const multTuned = (key) => (v, sim) => v.damage * sim.tuning[key];
 function define(spec) {
   return Object.freeze({
     directional: false,
+    legendary: false, // a legendary item (the one-per-ship blocks)
+    guide: false, // a projectile direction guide (turn and split blocks)
     implemented: true,
     acceptsAnyEntry: false,
     effect: null,
@@ -106,17 +110,17 @@ const visualOnly = (name, shareId, image) =>
 export const BLOCKS = Object.freeze([
   // ---- Direction blocks ---------------------------------------------------
   define({
-    name: 'Guide Right', shareId: 0x00, image: 'Right_turn.webp', directional: true,
+    name: 'Guide Right', shareId: 0x00, image: 'Right_turn.webp', directional: true, guide: true,
     effect: (v, sim) => (guidedBoost(v,sim) + sim.tuning.turnRightDamage),
     route: (v, out) => out.emit(right(v.rot)),
   }),
   define({
-    name: 'Guide Left', shareId: 0x01, image: 'Left_turn.webp', directional: true,
+    name: 'Guide Left', shareId: 0x01, image: 'Left_turn.webp', directional: true, guide: true,
     effect: (v, sim) => (guidedBoost(v,sim) + sim.tuning.turnLeftDamage),
     route: (v, out) => out.emit(left(v.rot)),
   }),
   define({
-    name: '2-Way Split', shareId: 0x02, image: 'Split_sides.webp', directional: true,
+    name: '2-Way Split', shareId: 0x02, image: 'Split_sides.webp', directional: true, guide: true,
     effect: guidedBoostAllGuides,
     route: (v, out) => {
       out.emit(left(v.rot));
@@ -124,7 +128,7 @@ export const BLOCKS = Object.freeze([
     },
   }),
   define({
-    name: '3-way Split', shareId: 0x06, image: 'Split_all.webp', directional: true,
+    name: '3-way Split', shareId: 0x06, image: 'Split_all.webp', directional: true, guide: true,
     effect: guidedBoostAllGuides,
     route: (v, out) => {
       out.emit(left(v.rot));
@@ -190,7 +194,7 @@ export const BLOCKS = Object.freeze([
      *  - Entering from behind (the main entry): the recorded damage of the projectile's ticket
      *    is ADDED to it; it leaves straight on.
      */
-    name: 'Damage Cross', shareId: 0x14, image: 'Damage_loop.webp', directional: true, acceptsAnyEntry: true,
+    name: 'Damage Cross', shareId: 0x14, image: 'Damage_loop.webp', acceptsAnyEntry: true, directional: true,
     effect: (v, sim) => {
       if (v.heading === v.rot) {
         const ticket = v.stamps !== null ? v.stamps[v.cell] : undefined;
@@ -209,7 +213,7 @@ export const BLOCKS = Object.freeze([
     },
   }),
   define({
-    name: '2-Way Random Split', shareId: 0x07, image: 'Random_double.webp', directional: true,
+    name: '2-Way Random Split', shareId: 0x07, image: 'Random_double.webp', directional: true, guide: true,
     effect: (v, sim) => guidedBoostAllGuides(v, sim) * sim.tuning.x2SplitDamage,
     // Normally ONE of the two sides, chosen at random. With the perk, sometimes BOTH (full damage on each).
     route: (v, out) => {
@@ -222,7 +226,7 @@ export const BLOCKS = Object.freeze([
     },
   }),
   define({
-    name: '3-Way Random Split', shareId: 0x08, image: 'Random_triple.webp', directional: true,
+    name: '3-Way Random Split', shareId: 0x08, image: 'Random_triple.webp', directional: true, guide: true,
     effect: (v, sim) => guidedBoostAllGuides(v, sim) * sim.tuning.x3SplitDamage,
     route: (v, out) => {
       if (out.roll(v.tuning.threeWaySplitChance)) {
@@ -235,13 +239,13 @@ export const BLOCKS = Object.freeze([
     },
   }),
   define({
-    name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp', maxPerShip: 1,
+    name: 'Tier Damage', shareId: 0x12, image: 'Max_tier_damage.webp', maxPerShip: 1, legendary: true,
     effect: (v, sim) => v.damage + sim.maxTier * sim.tuning.tierDamageRate,
     route: forward,
   }),
   define({
     // x4 damage when this projectile carries less than the previous one that passed through.
-    name: 'Damage Comeback', shareId: 0x11, image: 'Double_size_and_damage.webp', maxPerShip: 1,
+    name: 'Damage Comeback', shareId: 0x11, image: 'Double_size_and_damage.webp', maxPerShip: 1, legendary: true,
     effect: (v, sim) => {
       const previous = sim.lastDamage[v.cell]; // -1 = nothing has passed yet
       sim.lastDamage[v.cell] = v.damage;
@@ -251,12 +255,12 @@ export const BLOCKS = Object.freeze([
   }),
   define({
     // Pure marker: its effect (+10 % per empty tile) is applied globally at the ejector.
-    name: 'Damage Stockpile', shareId: 0x0e, image: 'Empty_tile_damage_boost.webp', maxPerShip: 1,
+    name: 'Damage Stockpile', shareId: 0x0e, image: 'Empty_tile_damage_boost.webp', maxPerShip: 1, legendary: true,
     route: forward,
   }),
   define({
     // Swallows projectiles; every 10th one leaves carrying the doubled sum of the last 10.
-    name: 'Combine 10', shareId: 0x10, image: 'Accumulator.webp', maxPerShip: 1,
+    name: 'Combine 10', shareId: 0x10, image: 'Accumulator.webp', maxPerShip: 1, legendary: true,
     effect: (v, sim) => {
       const i = v.cell;
       // Perk: each projectile counts as the higher of its own damage and the previous projectile's.
@@ -276,7 +280,7 @@ export const BLOCKS = Object.freeze([
 
   define({
     // After this block every turn block boosts the projectile (see guidedBoost).
-    name: 'Guided Damage', shareId: 0x13, image: 'Turn_damage.webp', maxPerShip: 1,
+    name: 'Guided Damage', shareId: 0x13, image: 'Turn_damage.webp', maxPerShip: 1, legendary: true,
     effect: (v) => {
       v.turnActive = 1;
       return v.damage;
@@ -284,18 +288,18 @@ export const BLOCKS = Object.freeze([
     route: forward,
   }),
   define({
-    name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp', maxPerShip: 1,
+    name: 'Add 100 Damage', shareId: 0x0b, image: 'Add_100_damage.webp', maxPerShip: 1, legendary: true,
     // + addDamageLarge, and (with the perk) + addLargePerTile for every tile travelled since the generator.
     effect: (v, sim) => v.damage + sim.tuning.addDamageLarge + sim.tuning.addLargePerTile * v.distance,
     route: forward,
   }),
   define({
-    name: 'Ejector Damage', shareId: 0x0f, image: '10_damage_unused_ejector.webp', maxPerShip: 1,
+    name: 'Ejector Damage', shareId: 0x0f, image: '10_damage_unused_ejector.webp', maxPerShip: 1, legendary: true,
     effect: (v, sim) => v.damage + sim.unusedEjectors * sim.tuning.ejectorDamageEach,
     route: forward,
   }),
   define({
-    name: 'Clone', shareId: 0x0c, image: 'Duplicate_bullet.webp', maxPerShip: 1,
+    name: 'Clone', shareId: 0x0c, image: 'Duplicate_bullet.webp', maxPerShip: 1, legendary: true,
     route: (v, out) => {
       out.emit(v.heading);
       out.emitCopy(v.heading);
@@ -320,7 +324,7 @@ export const BLOCKS = Object.freeze([
   define({
     // A projectile entering from the front does not continue: it reappears at the output portal.
     // With no output portal on the ship it simply ends here.
-    name: 'Input Portal', shareId: 0x33, image: 'Input Portal.jpg', directional: true, maxPerShip: 1, portal: 'in',
+    name: 'Input Portal', shareId: 0x33, image: 'Input Portal.jpg', directional: true, maxPerShip: 1, legendary: false, portal: 'in',
     route: (v, out) => {
       const exit = v.ship.portalOut;
       if (exit !== null) out.emitAt(exit.cell, opposite(exit.heading));
@@ -329,7 +333,7 @@ export const BLOCKS = Object.freeze([
   define({
     // Only the exit of the teleporter: it leaves through the side that normally receives
     // projectiles (the back). Projectiles that run into it directly are swallowed.
-    name: 'Output Portal', shareId: 0x34, image: 'Output Portal.jpg',directional: true, maxPerShip: 1, portal: 'out',
+    name: 'Output Portal', shareId: 0x34, image: 'Output Portal.jpg',directional: true, maxPerShip: 1, legendary: false, portal: 'out',
     route: () => {},
   }),  
   define({
@@ -368,10 +372,10 @@ export const BLOCKS = Object.freeze([
   visualOnly('Shoot Upward', 0x29, 'Forward.webp'),
   visualOnly('Sideways', 0x2a, 'Sideways.webp'),
   visualOnly('Money Cross', 0x2b, 'Money_loop.webp'),
-  visualOnly('Evolved Damage', 0x2c, 'More_damage_at_end_of_lifetime.webp'),
-  visualOnly('Slow Burn', 0x2d, 'Speed_damage_boost.webp'),
-  visualOnly('Crisscross', 0x2e, 'Zigzag_bullet.webp'),
-  visualOnly('Sparse Damage', 0x2f, 'Double_damage_10_bullet_screen.webp'),
+  define({name: 'Evolved Damage', shareId: 0x2c, image: 'More_damage_at_end_of_lifetime.webp', implemented: false, maxPerShip: 1, legendary: true, route: forward }),
+  define({name: 'Slow Burn', shareId: 0x2d, image: 'Speed_damage_boost.webp', implemented: false, maxPerShip: 1, legendary: true, route: forward }),
+  define({name: 'Crisscross', shareId: 0x2e, image: 'Zigzag_bullet.webp', implemented: false, maxPerShip: 1, legendary: true, route: forward }),
+  define({name: 'Sparse Damage', shareId: 0x2f, image: 'Double_damage_10_bullet_screen.webp', implemented: false, maxPerShip: 1, legendary: true, route: forward }),
   visualOnly('Armor Piercing', 0x35, 'Armor Piercing.png'),
   visualOnly('Energy Siphon', 0x36, 'Energy Siphon.png'),
   visualOnly('Incendiary', 0x37, 'Incendary.png'),

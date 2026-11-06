@@ -62,7 +62,7 @@ export class Simulation {
       ship,
       {
         baseDamage, burstCount, burstDamageMult, maxTier, unusedEjectors, tuning,
-        unusedDamageBonus: unusedDamageBonus(ship, tuning.stockpileRate),
+        unusedDamageBonus: unusedDamageBonus(ship, tuning),
       },
       rng,
     );

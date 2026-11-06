@@ -148,6 +148,8 @@ test('real perks: the ones just implemented change the numbers they should', () 
   assert.equal(rulesWith('dup10%').duplicateChance, 0.1);
   assert.equal(rulesWith('cross2x').damageCrossMultiplier, 2);
   assert.equal(rulesWith('guide').guidedAllGuides, 1);
+  assert.equal(rulesWith('emptyLeg').legendaryCountsAsEmpty, 1);
+  assert.equal(rulesWith('emptyDir').guidesCountAsEmpty, 1);
 });
 
 // ---- dmg20: +20 for EVERY "Add 1 Damage" block on the ship ----------------------------------------------
@@ -314,3 +316,71 @@ test('All Guides Damage: the plain splitters (no damage change of their own) are
 test('All Guides Damage: without Guided Damage on the ship the perk does nothing', () => {
   assert.equal(ev(shipWith('2-Way Random Split'), { guidedAllGuides: 1 }), 2);
 });
+
+// ---- Empty Legendary / Empty Directional: legendary blocks and guides count as unused slots --------------------
+import { compileShip, unusedDamageBonus } from '../js/engine/ship.js';
+
+const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
+
+/** Corridor with a Damage Stockpile and a few other blocks, all OFF the projectile's path (column 3). */
+function stockpileShip() {
+  const map = ['#######', '#..E..#', '#.....#', '#.....#', '#.....#', '#.....#', '#..^..#', '#######'];
+  const grid = parseShipMap(map, 8);
+  const o = mapOrigin(map, 8);
+  const put = (r, c, name) => { grid[o.r + r][o.c + c].block = name; grid[o.r + r][o.c + c].rotation = 0; };
+  put(4, 1, 'Damage Stockpile'); // legendary
+  put(3, 5, 'Tier Damage'); // legendary
+  put(2, 5, 'Guide Left'); // guide
+  put(4, 5, '2-Way Split'); // guide
+  return grid;
+}
+
+test('Damage Stockpile: the bonus counts only empty tiles, until the perks say otherwise', () => {
+  const ship = compileShip(stockpileShip());
+  assert.equal(ship.legendaryCount, 2); // the Stockpile itself and Tier Damage
+  assert.equal(ship.guideCount, 2);
+  const e = ship.emptyCount;
+  close(unusedDamageBonus(ship, DEFAULT_TUNING), e * 0.1);
+  close(unusedDamageBonus(ship, { ...DEFAULT_TUNING, legendaryCountsAsEmpty: 1 }), (e + 2) * 0.1);
+  close(unusedDamageBonus(ship, { ...DEFAULT_TUNING, guidesCountAsEmpty: 1 }), (e + 2) * 0.1);
+  close(unusedDamageBonus(ship, { ...DEFAULT_TUNING, legendaryCountsAsEmpty: 1, guidesCountAsEmpty: 1 }), (e + 4) * 0.1);
+});
+
+test('Damage Stockpile: without a Stockpile block there is never a bonus', () => {
+  const grid = stockpileShip();
+  for (const row of grid) for (const tile of row) if (tile.block === 'Damage Stockpile') tile.block = null;
+  const ship = compileShip(grid);
+  assert.equal(unusedDamageBonus(ship, { ...DEFAULT_TUNING, legendaryCountsAsEmpty: 1, guidesCountAsEmpty: 1 }), 0);
+});
+
+test('Damage Stockpile: the simulated damage follows the bonus (end to end)', () => {
+  const ship = compileShip(stockpileShip());
+  const expected = (tuning) => Number((1 + unusedDamageBonus(ship, { ...DEFAULT_TUNING, ...tuning })).toFixed(2));
+  for (const tuning of [{}, { legendaryCountsAsEmpty: 1 }, { guidesCountAsEmpty: 1 }, { legendaryCountsAsEmpty: 1, guidesCountAsEmpty: 1 }]) {
+    assert.equal(ev(stockpileShip(), tuning), expected(tuning), JSON.stringify(tuning));
+  }
+});
+
+test('Empty slot damage: a legendary block on the path pays +70 only with Empty Legendary', () => {
+  // generator, then rows 5 and 4 (empty), row 3 = Tier Damage (legendary, no damage change at tier 0), row 2 (empty), ejector
+  const tallWith = (name) => tall([[3, name]]);
+  assert.equal(ev(tallWith('Tier Damage'), { emptySlotDamage: 70 }), 1 + 3 * 70);
+  assert.equal(ev(tallWith('Tier Damage'), { emptySlotDamage: 70, legendaryCountsAsEmpty: 1 }), 1 + 4 * 70);
+  assert.equal(ev(tallWith('Tier Damage'), { legendaryCountsAsEmpty: 1 }), 1); // no empty-slot damage, nothing to pay
+});
+
+test('Empty slot damage: a block that is neither legendary nor a guide never counts', () => {
+  assert.equal(ev(tall([[3, 'Add 1 Damage']]), { emptySlotDamage: 70, legendaryCountsAsEmpty: 1, guidesCountAsEmpty: 1 }), 1 + 3 * 70 + 1);
+});
+
+test('Empty slot damage: a guide on the path pays +70 only with Empty Directional', () => {
+  // 2-Way Split in the middle of SPLIT_MAP: each branch crosses 1 empty slot, the guide, then 3 empty slots
+  const splitter = () => guidedSplitPlain('2-Way Split');
+  assert.equal(ev(splitter(), { emptySlotDamage: 70 }), 2 * (1 + 70 + 3 * 70)); // 562
+  assert.equal(ev(splitter(), { emptySlotDamage: 70, guidesCountAsEmpty: 1 }), 2 * (1 + 70 + 70 + 3 * 70)); // 702
+  assert.equal(ev(splitter(), { emptySlotDamage: 70, legendaryCountsAsEmpty: 1 }), 562); // wrong perk: no change
+});
+function guidedSplitPlain(splitter) {
+  const grid = shipWith(splitter); // at [2, 4] on SPLIT_MAP
+  return grid;
+}

@@ -141,6 +141,8 @@ export class TrialRunner {
     const { qCell, qHeading, qDamage, qOriginal, qTurn, qStamps, qDistance, visit } = this;
     const maxSteps = ENGINE_LIMITS.maxProjectileSteps;
     const emptySlotDamage = this.tuning.emptySlotDamage; // perk: flat damage for each empty slot crossed
+    const legendaryIsEmpty = this.tuning.legendaryCountsAsEmpty > 0; // perk: legendary blocks count as empty slots
+    const guidesAreEmpty = this.tuning.guidesCountAsEmpty > 0; // perk: direction guides count as empty slots
 
     this.crossRecords.clear();
     qCell[0] = emitter.cell;
@@ -186,7 +188,8 @@ export class TrialRunner {
         visit.cell = cell;
         visit.heading = heading;
         visit.rot = rot[cell];
-        visit.damage = qDamage[i];
+        // Entering a block that counts as an unused slot (perks) also pays the empty-slot damage.
+        visit.damage = (def.legendary && legendaryIsEmpty) || (def.guide && guidesAreEmpty) ? qDamage[i] + emptySlotDamage : qDamage[i];
         visit.original = qOriginal[i];
         visit.turnActive = qTurn[i];
         visit.stamps = qStamps[i];
